@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CS Tech · Contact Tracker</title>
+<!-- Supabase JS SDK (loaded from CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Your project URL + anon key -->
+<script src="supabase.js"></script>
 <style>
 :root{
   --bg:#F7F6F3;--surface:#FFFFFF;--surface2:#F2F1EE;
@@ -20,6 +24,20 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
 .app{display:flex;min-height:100vh;}
+/* ── Loading overlay ── */
+#loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:14px;}
+#loading-overlay .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+#loading-overlay p{font-size:13px;color:var(--text-3);}
+@keyframes spin{to{transform:rotate(360deg);}}
+/* ── Config error ── */
+#config-error{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:24px;text-align:center;}
+#config-error h2{font-size:16px;margin-bottom:8px;}
+#config-error p{font-size:13px;color:var(--text-2);max-width:480px;line-height:1.7;}
+#config-error code{background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;}
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;padding:10px 16px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;}
+#toast.show{opacity:1;}
+/* ── Sidebar ── */
 .sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
 .sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;letter-spacing:-0.01em;}
 .sidebar-logo span{color:var(--accent);}
@@ -29,19 +47,23 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .nav-item:hover{background:var(--surface2);color:var(--text);}
 .nav-item.active{background:var(--accent-bg);color:var(--accent);font-weight:500;}
 .nav-item svg{width:15px;height:15px;flex-shrink:0;}
+/* ── Main ── */
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:10;}
 .topbar-title{font-size:15px;font-weight:600;letter-spacing:-0.02em;}
 .topbar-actions{display:flex;gap:8px;align-items:center;}
 .content{padding:24px;flex:1;overflow-y:auto;}
+/* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);transition:background .1s;white-space:nowrap;}
 .btn:hover{background:var(--surface2);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
-.btn-primary:hover{background:#1d4ed8;border-color:#1d4ed8;}
+.btn-primary:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8;}
 .btn-danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger);}
 .btn-danger:hover{background:#fee2e2;}
 .btn-sm{padding:5px 10px;font-size:12px;}
 .btn svg{width:14px;height:14px;}
+/* ── Stats ── */
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
 .stat-label{font-size:11px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;}
@@ -49,6 +71,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .stat-card.danger .stat-value{color:var(--danger);}
 .stat-card.warm .stat-value{color:var(--warm);}
 .stat-card.success .stat-value{color:var(--success);}
+/* ── Table ── */
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
 .table-toolbar{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .search-box{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;flex:1;min-width:180px;}
@@ -69,6 +92,7 @@ tr:hover td{background:var(--bg);}
 .sub{font-size:12px;color:var(--text-3);margin-top:1px;}
 .li-link{color:var(--accent);font-size:12px;text-decoration:none;}
 .li-link:hover{text-decoration:underline;}
+/* ── Badges ── */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;}
 .badge-overdue{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border);}
 .badge-warm{background:var(--success-bg);color:var(--success);border:1px solid var(--success-border);}
@@ -88,11 +112,12 @@ tr:hover td{background:var(--bg);}
 .days-overdue{background:var(--danger-bg);color:var(--danger);}
 .days-soon{background:var(--warm-bg);color:var(--warm);}
 .days-ok{background:var(--success-bg);color:var(--success);}
+/* ── Row actions ── */
 .row-actions{display:flex;gap:5px;}
 .icon-btn{width:28px;height:28px;border-radius:var(--radius);border:1px solid var(--border);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .1s;}
 .icon-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--border-strong);}
 .icon-btn svg{width:13px;height:13px;}
-/* Modal */
+/* ── Modal ── */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
 .modal{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);width:640px;max-width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.12);}
 .modal-sm{width:400px;}
@@ -107,8 +132,7 @@ label{font-size:12px;font-weight:500;color:var(--text-2);}
 input[type=text],input[type=date],input[type=url],input[type=number],select,textarea{border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s;font-family:inherit;width:100%;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 textarea{resize:vertical;min-height:60px;}
-
-/* Combobox */
+/* ── Combobox ── */
 .combobox-wrap{position:relative;}
 .combobox-input{border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s;font-family:inherit;width:100%;cursor:text;}
 .combobox-input:focus{border-color:var(--accent);}
@@ -117,24 +141,23 @@ textarea{resize:vertical;min-height:60px;}
 .combobox-option{padding:8px 12px;font-size:13px;cursor:pointer;color:var(--text);}
 .combobox-option:hover,.combobox-option.focused{background:var(--accent-bg);color:var(--accent);}
 .combobox-empty{padding:10px 12px;font-size:13px;color:var(--text-3);}
-
-/* Templates */
+/* ── Templates ── */
 .template-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:12px;}
 .template-name{font-size:13px;font-weight:600;margin-bottom:4px;}
 .template-stats{display:flex;gap:16px;margin-bottom:10px;}
 .template-stat{font-size:12px;color:var(--text-2);}
 .template-stat strong{color:var(--text);}
-.template-body{background:var(--bg);border-radius:var(--radius);padding:12px 14px;font-size:12px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;font-family:inherit;}
+.template-body-preview{background:var(--bg);border-radius:var(--radius);padding:12px 14px;font-size:12px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;font-family:inherit;}
 .template-rate{font-size:12px;font-weight:600;color:var(--accent);}
 .template-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;}
 .template-bar-fill{height:100%;border-radius:2px;background:var(--accent);}
-/* Log */
+/* ── Log ── */
 .log-item{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);}
 .log-item:last-child{border-bottom:none;}
 .log-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .log-meta{font-size:12px;color:var(--text-3);margin-top:2px;}
 .log-note{font-size:13px;color:var(--text-2);margin-top:4px;}
-/* Settings */
+/* ── Settings ── */
 .settings-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;}
 .settings-title{font-size:13px;font-weight:600;margin-bottom:4px;}
 .settings-desc{font-size:12px;color:var(--text-3);margin-bottom:14px;}
@@ -145,18 +168,32 @@ textarea{resize:vertical;min-height:60px;}
 .tag-add-row{display:flex;gap:8px;}
 .tag-add-row input{flex:1;}
 .priority-rule{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--border);}
-.priority-rule-name{font-size:13px;font-weight:500;min-width:60px;}
 .priority-rule input[type=number]{width:80px;}
 .priority-rule-label{font-size:12px;color:var(--text-3);}
-.priority-rule .drag-handle{color:var(--text-3);cursor:grab;margin-right:4px;}
-/* Empty */
+/* ── Empty ── */
 .empty{text-align:center;padding:48px 20px;color:var(--text-3);}
 .empty-icon{font-size:32px;margin-bottom:10px;}
 @media(max-width:900px){.stats-row{grid-template-columns:1fr 1fr;}.form-row{grid-template-columns:1fr;}.sidebar{display:none;}}
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Connecting to database…</p>
+</div>
+
+<!-- Config error screen -->
+<div id="config-error">
+  <h2>⚠️ Supabase not configured</h2>
+  <p>Open <code>supabase.js</code> and replace <code>PASTE_YOUR_PROJECT_URL_HERE</code> and <code>PASTE_YOUR_ANON_KEY_HERE</code> with your actual Supabase project credentials.<br><br>See <code>SETUP.md</code> for step-by-step instructions.</p>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<div class="app" id="app" style="display:none;">
 <aside class="sidebar">
   <div class="sidebar-logo">CS<span>Tech</span> · Outreach</div>
   <div class="sidebar-section">
@@ -192,7 +229,7 @@ textarea{resize:vertical;min-height:60px;}
       <div class="topbar-title">Contact tracker</div>
       <div class="topbar-actions">
         <button class="btn btn-sm" onclick="exportCSV()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
         </button>
         <button class="btn btn-primary btn-sm" onclick="openAddContact()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>Add contact
@@ -211,15 +248,9 @@ textarea{resize:vertical;min-height:60px;}
             <option value="">All statuses</option>
             <option>Overdue</option><option>Warm</option><option>Cold</option><option>Passive</option>
           </select>
-          <select class="filter-select" id="filterPriority" onchange="renderTable()">
-            <option value="">All priorities</option>
-          </select>
-          <select class="filter-select" id="filterRel" onchange="renderTable()">
-            <option value="">All types</option>
-          </select>
-          <select class="filter-select" id="filterAssigned" onchange="renderTable()">
-            <option value="">All assignees</option>
-          </select>
+          <select class="filter-select" id="filterPriority" onchange="renderTable()"><option value="">All priorities</option></select>
+          <select class="filter-select" id="filterRel" onchange="renderTable()"><option value="">All types</option></select>
+          <select class="filter-select" id="filterAssigned" onchange="renderTable()"><option value="">All assignees</option></select>
         </div>
         <div style="overflow-x:auto;">
           <table>
@@ -230,7 +261,7 @@ textarea{resize:vertical;min-height:60px;}
               <th onclick="sortBy('status')">Status <span class="sort-icon" id="sort-status">↕</span></th>
               <th onclick="sortBy('priority')">Priority <span class="sort-icon" id="sort-priority">↕</span></th>
               <th onclick="sortBy('days')">Next touch <span class="sort-icon" id="sort-days">↕</span></th>
-              <th onclick="sortBy('lastTouch')">Last touch <span class="sort-icon" id="sort-lastTouch">↕</span></th>
+              <th onclick="sortBy('last_touch_date')">Last touch <span class="sort-icon" id="sort-last_touch_date">↕</span></th>
               <th>Assigned</th>
               <th>Last engagement</th>
               <th></th>
@@ -276,7 +307,10 @@ textarea{resize:vertical;min-height:60px;}
 
   <!-- Settings -->
   <div id="view-settings" style="display:none;flex-direction:column;">
-    <div class="topbar"><div class="topbar-title">Settings</div></div>
+    <div class="topbar">
+      <div class="topbar-title">Settings</div>
+      <button class="btn btn-primary btn-sm" id="saveSettingsBtn" onclick="saveSettings()">Save settings</button>
+    </div>
     <div class="content" id="settingsContent"></div>
   </div>
 
@@ -285,11 +319,15 @@ textarea{resize:vertical;min-height:60px;}
     <div class="topbar"><div class="topbar-title">Guide & rules</div></div>
     <div class="content">
       <div style="max-width:640px;">
-        <div class="template-card"><div class="template-name">Purpose</div><div class="template-body">Track all CS Technologies contacts across past clients and cold targets. Manage touch frequency to stay visible without aggressive outreach.</div></div>
-        <div class="template-card"><div class="template-name">Relationship types</div><div class="template-body">Past Client — Someone from a company CS Tech has previously worked with. Highest priority.\n\nCold Target — No prior relationship. Do not contact directly yet. Build visibility via content/LinkedIn first.\n\nWarm Lead — Cold contact that has engaged. Can move to light direct outreach.</div></div>
-        <div class="template-card"><div class="template-name">Status flags (auto-calculated)</div><div class="template-body">Warm — Last touch within 30 days.\nOverdue — Past the next touch date.\nCold — Never been touched.\nPassive — Touched before, but not recently overdue.</div></div>
-        <div class="template-card"><div class="template-name">Touch cadence</div><div class="template-body">Cadence is set per priority tier in Settings. High = 3 months by default, Mid = 4, Low = 6. Change these at any time — all next-touch dates recalculate automatically.</div></div>
-        <div class="template-card"><div class="template-name">Important notes</div><div class="template-body">Sign-off — All outreach must be reviewed by a senior team member.\nUpdates — After every touch, log the interaction so the tracker stays current.\nNew contacts — Fill all columns before marking active.</div></div>
+        <div class="template-card"><div class="template-name">Purpose</div><div class="template-body-preview">Track all CS Technologies contacts across past clients and cold targets. Manage touch frequency to stay visible without aggressive outreach.</div></div>
+        <div class="template-card"><div class="template-name">Status flags (auto-calculated)</div><div class="template-body-preview">Warm — Last touch within 30 days.
+Overdue — Past the next touch date.
+Cold — Never been touched.
+Passive — Touched before, but not recently overdue.</div></div>
+        <div class="template-card"><div class="template-name">Touch cadence</div><div class="template-body-preview">Cadence is set per priority tier in Settings. High = 3 months by default, Mid = 4, Low = 6. All next-touch dates recalculate automatically when you change these.</div></div>
+        <div class="template-card"><div class="template-name">Important notes</div><div class="template-body-preview">Sign-off — All outreach must be reviewed by a senior team member.
+Updates — After every touch, log the interaction to keep the tracker current.
+New contacts — Fill all columns before marking active.</div></div>
       </div>
     </div>
   </div>
@@ -332,10 +370,7 @@ textarea{resize:vertical;min-height:60px;}
       <div class="form-group"><label>Touchpoint type</label><select id="f-touchtype"></select></div>
       <div class="form-group"><label>Engagement type</label><select id="f-engagement"></select></div>
     </div>
-    <div class="form-group full" style="margin-top:2px;">
-      <label>Notes / context</label>
-      <textarea id="f-notes" rows="3" placeholder="Background, talking points, relationship context…"></textarea>
-    </div>
+    <div class="form-group full"><label>Notes / context</label><textarea id="f-notes" rows="3" placeholder="Background, talking points, relationship context…"></textarea></div>
   </div>
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('contactModal')">Cancel</button>
@@ -348,7 +383,7 @@ textarea{resize:vertical;min-height:60px;}
 <div class="modal-backdrop" id="logModal" style="display:none;" onclick="closeOnBackdrop(event,'logModal')">
 <div class="modal" style="width:500px;" onclick="event.stopPropagation()">
   <div class="modal-header">
-    <div class="modal-title" id="logModalTitle">Log interaction</div>
+    <div class="modal-title">Log interaction</div>
     <button class="icon-btn" onclick="closeModal('logModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
   <div class="modal-body">
@@ -365,25 +400,14 @@ textarea{resize:vertical;min-height:60px;}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Touchpoint type</label><select id="l-type"></select></div>
-      <div class="form-group">
-        <label>Template used</label>
-        <select id="l-template" onchange="handleTemplateChange()">
-          <option value="">— no template (custom) —</option>
-        </select>
-      </div>
+      <div class="form-group"><label>Template used</label><select id="l-template"><option value="">— no template (custom) —</option></select></div>
     </div>
-    <div class="form-group" style="margin-bottom:12px;">
-      <label>Response type</label>
-      <select id="l-response"></select>
-    </div>
-    <div class="form-group">
-      <label>Notes / outcome</label>
-      <textarea id="l-notes" rows="3" placeholder="What happened, key takeaways…"></textarea>
-    </div>
+    <div class="form-group" style="margin-bottom:12px;"><label>Response type</label><select id="l-response"></select></div>
+    <div class="form-group"><label>Notes / outcome</label><textarea id="l-notes" rows="3" placeholder="What happened, key takeaways…"></textarea></div>
   </div>
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('logModal')">Cancel</button>
-    <button class="btn btn-primary" onclick="saveLog()">Save</button>
+    <button class="btn btn-primary" id="saveLogBtn" onclick="saveLog()">Save</button>
   </div>
 </div>
 </div>
@@ -410,7 +434,7 @@ textarea{resize:vertical;min-height:60px;}
 <div class="modal-backdrop" id="deleteModal" style="display:none;" onclick="closeOnBackdrop(event,'deleteModal')">
 <div class="modal modal-sm" onclick="event.stopPropagation()">
   <div class="modal-header">
-    <div class="modal-title" id="deleteTitle">Remove contact?</div>
+    <div class="modal-title" id="deleteTitle">Confirm</div>
     <button class="icon-btn" onclick="closeModal('deleteModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
   <div class="modal-body"><p style="font-size:13px;color:var(--text-2);" id="deleteMsg"></p></div>
@@ -422,103 +446,165 @@ textarea{resize:vertical;min-height:60px;}
 </div>
 
 <script>
-// ── Config (editable) ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  SUPABASE INIT
+// ═══════════════════════════════════════════════════════════════
+let db;
+function initSupabase() {
+  if (!window.SUPABASE_URL || window.SUPABASE_URL.includes('PASTE_')) {
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('config-error').style.display = 'flex';
+    return false;
+  }
+  const { createClient } = supabase;
+  db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  IN-MEMORY STATE  (populated from DB on load)
+// ═══════════════════════════════════════════════════════════════
+let contacts = [];
+let interactionLog = [];
+let templates = [];
 let config = {
-  priorities: [
-    { name: 'High', months: 3 },
-    { name: 'Mid',  months: 4 },
-    { name: 'Low',  months: 6 },
-  ],
-  assignees:      ['Anthony Borg', 'Team Lead'],
-  relationTypes:  ['Past Client', 'Cold Target', 'Warm Lead'],
-  triggers:       ['Standard Check-in','Funding Announcement','New Initiative','Organisational Restructure','Industry Regulation Change','Technology Shift','Technical Disruption','Public Milestone','System Update'],
-  touchTypes:     ['Email','LinkedIn','Facebook','Phone','In person'],
-  responseTypes:  ['Positive Reply','Neutral/No Update','No Response (No Read Receipt)','No Response','Read & Ignored','Ghosted'],
-  lifecycleStages:['Active','Passive','Transition','Reactivation'],
+  priorities: [{name:'High',months:3},{name:'Mid',months:4},{name:'Low',months:6}],
+  assignees: ['Anthony Borg','Team Lead'],
+  relationTypes: ['Past Client','Cold Target','Warm Lead'],
+  triggers: ['Standard Check-in','Funding Announcement','New Initiative','Organisational Restructure','Industry Regulation Change','Technology Shift','Technical Disruption','Public Milestone','System Update'],
+  touchTypes: ['Email','LinkedIn','Facebook','Phone','In person'],
+  responseTypes: ['Positive Reply','Neutral/No Update','No Response (No Read Receipt)','No Response','Read & Ignored','Ghosted'],
+  lifecycleStages: ['Active','Passive','Transition','Reactivation'],
 };
 
-// ── Data ───────────────────────────────────────────────────────────────────
+let sortCol = 'days', sortDir = 1;
+let editingContactId = null, editingTemplateId = null;
+let deleteTarget = null, deleteType = null;
+let currentView = 'tracker';
+let comboboxFocusIdx = -1;
+
+// ═══════════════════════════════════════════════════════════════
+//  DATE HELPERS
+// ═══════════════════════════════════════════════════════════════
 const today = new Date(); today.setHours(0,0,0,0);
-function parseDate(s){ if(!s||s==='NaT'||s==='NaN') return null; const d=new Date(s); return isNaN(d.getTime())?null:d; }
+function parseDate(s){ if(!s) return null; const d=new Date(s); return isNaN(d)?null:d; }
 function formatDate(d){ if(!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function daysDiff(d){ if(!d) return null; return Math.round((d-today)/86400000); }
 function edate(base,months){ if(!base) return null; const r=new Date(base); r.setMonth(r.getMonth()+months); return r; }
-function monthsForPriority(p){ const tier=config.priorities.find(x=>x.name===p); return tier?tier.months:3; }
-function calcNextTouch(lastDate,priority){ const m=monthsForPriority(priority); if(!priority) return null; return edate(lastDate||today,m); }
+function monthsForPriority(p){ const t=config.priorities.find(x=>x.name===p); return t?t.months:3; }
+function calcNextTouch(lastDate,priority){ return edate(lastDate||today, monthsForPriority(priority)); }
 function calcStatus(lastDate,nextTouch){
   if(!lastDate) return 'Cold';
-  const days=daysDiff(nextTouch);
-  if(days<0) return 'Overdue';
+  if(daysDiff(nextTouch)<0) return 'Overdue';
   if(Math.round((today-lastDate)/86400000)<30) return 'Warm';
   return 'Passive';
 }
 function enrichContact(c){
-  const lastDate=parseDate(c.lastDate);
-  const nextTouch=calcNextTouch(lastDate,c.priority);
-  const status=calcStatus(lastDate,nextTouch);
-  const days=daysDiff(nextTouch);
-  return {...c,lastDateObj:lastDate,nextTouchObj:nextTouch,status,days};
+  const lastDate = parseDate(c.last_touch_date);
+  const nextTouch = calcNextTouch(lastDate, c.priority);
+  return {...c, lastDateObj:lastDate, nextTouchObj:nextTouch, status:calcStatus(lastDate,nextTouch), days:daysDiff(nextTouch)};
 }
 
-let contacts=[
-  {id:1,name:'Sophie Martin',title:'Head of eCommerce',company:'La Redoute',linkedin:'linkedin.com/in/sophiemartin',rel:'Past Client',connection:'La Redoute project 2018-2022',trigger:'Funding Announcement',lastDate:'2024-11-01',lastType:'Project close-out call',lifecycle:'Transition',priority:'High',assigned:'Anthony Borg',touchType:'Email',engagement:'No Response (No Read Receipt)',notes:'Led integration of order mgmt system. Moved internal teams to new platform.'},
-  {id:2,name:'Pierre Dubois',title:'CTO',company:'Conforama',linkedin:'linkedin.com/in/pierredubois',rel:'Past Client',connection:'Conforama engagement 2019',trigger:'Industry Regulation Change',lastDate:'2024-09-15',lastType:'Coffee at Paris Retail',lifecycle:'Reactivation',priority:'Mid',assigned:'Anthony Borg',touchType:'Email',engagement:'Neutral/No Update',notes:'Was VP Eng at Conforama, now CTO. Very open to reconnecting.'},
-  {id:3,name:'Claire Fontaine',title:'VP Technology',company:'AtlasForMen',linkedin:'linkedin.com/in/clairefontaine',rel:'Past Client',connection:'AtlasForMen 2020-2021',trigger:'Industry Regulation Change',lastDate:'2026-06-20',lastType:'LinkedIn message',lifecycle:'Active',priority:'Low',assigned:'Team Lead',touchType:'LinkedIn',engagement:'Positive Reply',notes:'Project wrapped smoothly. Mentioned possible expansion in 2025.'},
-  {id:4,name:'Marc Lefevre',title:'Director, Payments',company:'Oney',linkedin:'linkedin.com/in/marclefevre',rel:'Past Client',connection:'Oney/Oney Trust integration',trigger:'Public Milestone',lastDate:'2024-07-20',lastType:'Sent case study',lifecycle:'Active',priority:'High',assigned:'Anthony Borg',touchType:'Facebook',engagement:'Read & Ignored',notes:'Deep Fintech background. Contact re: payment gateway work.'},
-  {id:5,name:'Isabelle Renaud',title:'Product Manager',company:'PARISCityVISION',linkedin:'linkedin.com/in/isabellerenaud',rel:'Past Client',connection:'PARISCityVISION 2017-2019',trigger:'Standard Check-in',lastDate:'2023-12-01',lastType:'Email check-in',lifecycle:'Active',priority:'Mid',assigned:'Team Lead',touchType:'Email',engagement:'No Response (No Read Receipt)',notes:'Has since moved up to Senior PM. Company expanding digital.'},
-  {id:6,name:'Thomas Müller',title:'CTO',company:'Zalando SE',linkedin:'linkedin.com/in/thomasmuller',rel:'Cold Target',connection:'Similar EU eCommerce profile',trigger:'Standard Check-in',lastDate:null,lastType:null,lifecycle:'Passive',priority:'Low',assigned:'Anthony Borg',touchType:'Email',engagement:'Neutral/No Update',notes:'Tier 1 target. Large EU retailer, MS stack aligned.'},
-  {id:7,name:'Anna Kowalski',title:'Head of Engineering',company:'Allegro',linkedin:'linkedin.com/in/annakowalski',rel:'Cold Target',connection:'EU eCommerce, Fintech adjacent',trigger:'Technical Disruption',lastDate:null,lastType:null,lifecycle:'Passive',priority:'High',assigned:'Team Lead',touchType:'Email',engagement:'Positive Reply',notes:"Poland's largest eCommerce. Spring Boot heavy — good fit."},
-  {id:8,name:'Luc Bertrand',title:'VP Digital',company:'Cdiscount',linkedin:'linkedin.com/in/lucbertrand',rel:'Cold Target',connection:'French retailer, similar scale',trigger:'New Initiative',lastDate:null,lastType:null,lifecycle:'Passive',priority:'Mid',assigned:'Anthony Borg',touchType:'LinkedIn',engagement:'Read & Ignored',notes:'Direct competitor client profile to Conforama. Worth a content share.'},
-  {id:9,name:'Elena Vasquez',title:'Head of Fintech',company:'Payplug',linkedin:'linkedin.com/in/elenavasquez',rel:'Cold Target',connection:'EU Fintech, payment processing',trigger:'New Initiative',lastDate:null,lastType:null,lifecycle:'Passive',priority:'Low',assigned:'Team Lead',touchType:'Facebook',engagement:'No Response (No Read Receipt)',notes:'Growing French fintech. NestJS/Kafka stack relevant.'},
-  {id:10,name:'Jan Novak',title:'Engineering Manager',company:'Rohlik Group',linkedin:'linkedin.com/in/jannovak',rel:'Cold Target',connection:'EU grocery eCommerce',trigger:'Public Milestone',lastDate:null,lastType:null,lifecycle:'Passive',priority:'High',assigned:'Anthony Borg',touchType:'Email',engagement:'Neutral/No Update',notes:'Fast-growing EU eCommerce. Mobile-first, Kotlin relevant.'},
-];
-
-let interactionLog=[
-  {id:1,date:'2026-06-01',contact:'Sophie Martin',type:'LinkedIn Message',template:'3',notes:"Wished her luck on the new promotion; she replied thanking us and saying let's catch up soon.",response:'Positive Reply'},
-  {id:2,date:'2026-06-03',contact:'Pierre Dubois',type:'Email',template:'3',notes:'Shared the industry article on retail tech trends.',response:'No Response (No Read Receipt)'},
-  {id:3,date:'2026-06-10',contact:'Marc Lefevre',type:'LinkedIn Message',template:'2',notes:"Checked in after his company's latest funding round; he replied asking about our current availability.",response:'Positive Reply'},
-  {id:4,date:'2026-06-12',contact:'Claire Fontaine',type:'Email',template:'4',notes:'Sent over a case study snippet. She replied saying "Thanks for sharing!" but no follow-up.',response:'Neutral/No Update'},
-  {id:5,date:'2026-06-15',contact:'Thomas Muller',type:'LinkedIn Message',template:'3',notes:'Congratulated him on his 3-year work anniversary.',response:'Ghosted'},
-  {id:6,date:'2026-06-20',contact:'Isabelle Renaud',type:'Email',template:'7',notes:'Sent a generic check-in email. Read receipt picked up, but no answer.',response:'Ghosted'},
-  {id:7,date:'2026-06-25',contact:'Anna Kowalski',type:'Email',template:'7',notes:'Quick share of project insights; she asked to book a formal sync next month.',response:'No Response (No Read Receipt)'},
-  {id:8,date:'2026-06-28',contact:'Luc Bertrand',type:'LinkedIn Message',template:'2',notes:'Commented on his recent LinkedIn post about eCommerce. He liked the comment but did not reply.',response:'Neutral/No Update'},
-  {id:9,date:'2026-07-01',contact:'Elena Vasquez',type:'Email',template:'2',notes:"Emailed congratulations on her team's industry award. She sent a warm thank you note.",response:'Positive Reply'},
-  {id:10,date:'2026-07-05',contact:'Jan Novak',type:'LinkedIn Message',template:'4',notes:'Dropped a quick "no pressure" hello check-in.',response:'No Response'},
-];
-
-let templates=[
-  {id:1,name:'Past client – Check-in',body:"Hi [Name],\n\nHope you're well. I was thinking about the work we did together on [project] and wanted to reach out to see how things are going on your end.\n\nWe've recently completed a similar engagement for [relevant client type] — happy to share notes if ever useful.\n\nBest,\n[Sender Name]"},
-  {id:2,name:'Job change – Congratulation',body:"Hi [Name],\n\nSaw you've moved to [New Company] — congratulations! [New Company] is doing interesting things in [space].\n\nWould love to stay in touch as you settle in. If anything we do at CS Technologies is ever relevant, don't hesitate to reach out.\n\nBest,\n[Sender Name]"},
-  {id:3,name:'Relevant content share',body:"Hi [Name],\n\nWe just published a case study on [topic relevant to them] — given your work in [their area], thought it might be worth a read.\n\n[Link]\n\nNo agenda — just thought it might be useful.\n\nBest,\n[Sender Name]"},
-  {id:4,name:'Cold – Warm intro request',body:"Hi [Mutual Contact],\n\nHope you're well. I'm looking to connect with [Target Name] at [Company] — I think there could be a relevant fit given our work in [area].\n\nWould you be comfortable making an introduction, even just a brief one? Happy to send a short note you can forward.\n\nThanks,\n[Sender Name]"},
-  {id:5,name:'Conference pre-touch',body:"Hi [Name],\n\nI'll be at [Event Name] next month. Will you be there? If so, would be great to grab a coffee — no agenda, just a catch-up.\n\nBest,\n[Sender Name]"},
-];
-
-let nextContactId=11, nextLogId=11, nextTemplateId=6;
-let sortCol='days', sortDir=1;
-let editingContactId=null, editingTemplateId=null;
-let deleteTarget=null, deleteType=null;
-let currentView='tracker';
-
-// ── Combobox ───────────────────────────────────────────────────────────────
-let comboboxFocusIdx=-1;
-function getSortedContactNames(){
-  return [...contacts].sort((a,b)=>a.name.localeCompare(b.name)).map(c=>c.name);
+// ═══════════════════════════════════════════════════════════════
+//  DB HELPERS  –  all reads/writes go through Supabase
+// ═══════════════════════════════════════════════════════════════
+async function dbLoad(){
+  const [c, l, t, s] = await Promise.all([
+    db.from('contacts').select('*').order('name'),
+    db.from('interaction_log').select('*').order('date', {ascending:false}),
+    db.from('templates').select('*').order('created_at'),
+    db.from('settings').select('*').eq('id', 1).single(),
+  ]);
+  if(c.error) throw c.error;
+  if(l.error) throw l.error;
+  if(t.error) throw t.error;
+  contacts = c.data || [];
+  interactionLog = l.data || [];
+  templates = t.data || [];
+  if(s.data?.config) config = {...config, ...s.data.config};
 }
-function openCombobox(){
-  filterCombobox();
-  document.getElementById('l-contact-dropdown').classList.add('open');
+
+async function dbUpsertContact(data){
+  const row = {
+    name: data.name, title: data.title, company: data.company,
+    linkedin: data.linkedin, rel: data.rel, connection: data.connection,
+    trigger: data.trigger, last_touch_date: data.last_touch_date||null,
+    last_touch_type: data.last_touch_type, lifecycle: data.lifecycle,
+    priority: data.priority, assigned: data.assigned,
+    touch_type: data.touch_type, engagement: data.engagement, notes: data.notes,
+  };
+  if(data.id){ row.id = data.id; }
+  const {data:res, error} = await db.from('contacts').upsert(row).select().single();
+  if(error) throw error;
+  return res;
 }
+
+async function dbDeleteContact(id){
+  const {error} = await db.from('contacts').delete().eq('id',id);
+  if(error) throw error;
+}
+
+async function dbInsertLog(data){
+  const {data:res, error} = await db.from('interaction_log').insert({
+    date: data.date, contact_name: data.contact_name,
+    type: data.type, template_id: data.template_id||null,
+    response: data.response, notes: data.notes,
+  }).select().single();
+  if(error) throw error;
+  return res;
+}
+
+async function dbUpsertTemplate(data){
+  const row = {name: data.name, body: data.body};
+  if(data.id){ row.id = data.id; }
+  const {data:res, error} = await db.from('templates').upsert(row).select().single();
+  if(error) throw error;
+  return res;
+}
+
+async function dbDeleteTemplate(id){
+  const {error} = await db.from('templates').delete().eq('id',id);
+  if(error) throw error;
+}
+
+async function dbSaveSettings(){
+  const {error} = await db.from('settings').upsert({id:1, config});
+  if(error) throw error;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, isError=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=isError?'var(--danger)':'var(--text)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+function setLoading(btnId, loading){
+  const btn=document.getElementById(btnId); if(!btn) return;
+  btn.disabled=loading;
+  if(loading) btn.dataset.orig=btn.textContent, btn.textContent='Saving…';
+  else btn.textContent=btn.dataset.orig||btn.textContent;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  COMBOBOX
+// ═══════════════════════════════════════════════════════════════
+function getSortedContactNames(){ return [...contacts].sort((a,b)=>a.name.localeCompare(b.name)).map(c=>c.name); }
+function openCombobox(){ filterCombobox(); document.getElementById('l-contact-dropdown').classList.add('open'); }
 function filterCombobox(){
   const q=document.getElementById('l-contact-input').value.trim().toLowerCase();
   const names=getSortedContactNames().filter(n=>!q||n.toLowerCase().includes(q));
   const dd=document.getElementById('l-contact-dropdown');
   comboboxFocusIdx=-1;
-  if(!names.length){
-    dd.innerHTML='<div class="combobox-empty">No contacts found</div>';
-  } else {
-    dd.innerHTML=names.map((n,i)=>`<div class="combobox-option" data-name="${esc(n)}" onclick="selectCombobox('${esc(n)}')">${esc(n)}</div>`).join('');
-  }
+  dd.innerHTML=names.length
+    ? names.map(n=>`<div class="combobox-option" data-name="${esc(n)}" onclick="selectCombobox('${esc(n)}')">${esc(n)}</div>`).join('')
+    : '<div class="combobox-empty">No contacts found</div>';
   dd.classList.add('open');
 }
 function selectCombobox(name){
@@ -533,77 +619,78 @@ function comboboxKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();comboboxFocusIdx=Math.min(comboboxFocusIdx+1,opts.length-1);updateComboFocus(opts);}
   else if(e.key==='ArrowUp'){e.preventDefault();comboboxFocusIdx=Math.max(comboboxFocusIdx-1,0);updateComboFocus(opts);}
   else if(e.key==='Enter'&&comboboxFocusIdx>=0){e.preventDefault();opts[comboboxFocusIdx]&&selectCombobox(opts[comboboxFocusIdx].dataset.name);}
-  else if(e.key==='Escape'){dd.classList.remove('open');}
+  else if(e.key==='Escape') dd.classList.remove('open');
 }
 function updateComboFocus(opts){
   opts.forEach((o,i)=>o.classList.toggle('focused',i===comboboxFocusIdx));
   if(opts[comboboxFocusIdx]) opts[comboboxFocusIdx].scrollIntoView({block:'nearest'});
 }
 document.addEventListener('click',e=>{
-  if(!document.getElementById('contactComboWrap')?.contains(e.target)){
+  if(!document.getElementById('contactComboWrap')?.contains(e.target))
     document.getElementById('l-contact-dropdown')?.classList.remove('open');
-  }
 });
 
-// ── View ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  VIEW SWITCHING
+// ═══════════════════════════════════════════════════════════════
 function showView(name){
   currentView=name;
-  document.querySelectorAll('[id^="view-"]').forEach(el=>el.style.display='none');
+  document.querySelectorAll('[id^="view-"]').forEach(el=>{el.style.display='none';});
   const el=document.getElementById('view-'+name);
   el.style.display='flex'; el.style.flexDirection='column';
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+name+"'"))b.classList.add('active');});
-  if(name==='tracker'){populateDynamicFilters();renderStats();renderTable();}
+  document.querySelectorAll('.nav-item').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+name+"'")) b.classList.add('active');});
+  if(name==='tracker'){ populateDynamicFilters(); renderStats(); renderTable(); }
   if(name==='log') renderLog();
   if(name==='templates') renderTemplates();
   if(name==='summary') renderSummary();
   if(name==='settings') renderSettings();
 }
 
-// ── Dynamic selects ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  DYNAMIC SELECTS
+// ═══════════════════════════════════════════════════════════════
 function populateSelect(id,items,selected,allowBlank){
   const el=document.getElementById(id); if(!el) return;
   el.innerHTML=(allowBlank?'<option value="">—</option>':'')+items.map(v=>`<option value="${esc(v)}"${v===selected?' selected':''}>${esc(v)}</option>`).join('');
 }
 function populateDynamicFilters(){
-  const el=document.getElementById('filterPriority');
-  if(el) el.innerHTML='<option value="">All priorities</option>'+config.priorities.map(p=>`<option>${esc(p.name)}</option>`).join('');
-  const el2=document.getElementById('filterRel');
-  if(el2) el2.innerHTML='<option value="">All types</option>'+config.relationTypes.map(r=>`<option>${esc(r)}</option>`).join('');
-  refreshAssigneeFilter();
-}
-function refreshAssigneeFilter(){
-  const sel=document.getElementById('filterAssigned'); if(!sel) return;
-  const cur=sel.value;
-  sel.innerHTML='<option value="">All assignees</option>'+config.assignees.sort().map(a=>`<option${a===cur?' selected':''}>${esc(a)}</option>`).join('');
+  const fp=document.getElementById('filterPriority');
+  if(fp) fp.innerHTML='<option value="">All priorities</option>'+config.priorities.map(p=>`<option>${esc(p.name)}</option>`).join('');
+  const fr=document.getElementById('filterRel');
+  if(fr) fr.innerHTML='<option value="">All types</option>'+config.relationTypes.map(r=>`<option>${esc(r)}</option>`).join('');
+  const fa=document.getElementById('filterAssigned');
+  if(fa){
+    const cur=fa.value;
+    fa.innerHTML='<option value="">All assignees</option>'+config.assignees.sort().map(a=>`<option${a===cur?' selected':''}>${esc(a)}</option>`).join('');
+  }
 }
 function populateContactForm(c){
-  populateSelect('f-rel',config.relationTypes,c?.rel||config.relationTypes[0]);
-  populateSelect('f-priority',config.priorities.map(p=>p.name),c?.priority||config.priorities[0]?.name);
-  populateSelect('f-trigger',config.triggers,c?.trigger||config.triggers[0]);
-  populateSelect('f-lifecycle',config.lifecycleStages,c?.lifecycle||config.lifecycleStages[0]);
-  populateSelect('f-assigned',config.assignees,c?.assigned||config.assignees[0]);
-  populateSelect('f-touchtype',config.touchTypes,c?.touchType||config.touchTypes[0]);
-  populateSelect('f-engagement',config.responseTypes,c?.engagement||config.responseTypes[0]);
+  populateSelect('f-rel',config.relationTypes,c?.rel);
+  populateSelect('f-priority',config.priorities.map(p=>p.name),c?.priority);
+  populateSelect('f-trigger',config.triggers,c?.trigger);
+  populateSelect('f-lifecycle',config.lifecycleStages,c?.lifecycle);
+  populateSelect('f-assigned',config.assignees,c?.assigned);
+  populateSelect('f-touchtype',config.touchTypes,c?.touch_type);
+  populateSelect('f-engagement',config.responseTypes,c?.engagement);
 }
 function populateLogForm(preselect){
-  // Touchpoint types
-  const el=document.getElementById('l-type');
-  el.innerHTML=config.touchTypes.map(v=>`<option>${esc(v)}</option>`).join('');
-  // Templates (custom = blank option)
-  const tpl=document.getElementById('l-template');
-  tpl.innerHTML='<option value="">— no template (custom) —</option>'+templates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  // Response types
+  const tEl=document.getElementById('l-type');
+  tEl.innerHTML=config.touchTypes.map(v=>`<option>${esc(v)}</option>`).join('');
+  const tmplEl=document.getElementById('l-template');
+  tmplEl.innerHTML='<option value="">— no template (custom) —</option>'+templates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   populateSelect('l-response',config.responseTypes,config.responseTypes[0]);
-  // Combobox
   document.getElementById('l-contact-input').value=preselect||'';
   document.getElementById('l-contact-value').value=preselect||'';
 }
 
-// ── Stats ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════════════════════
 function renderStats(){
   const e=contacts.map(enrichContact);
-  const total=e.length,overdue=e.filter(c=>c.status==='Overdue').length,warm=e.filter(c=>c.status==='Warm').length,cold=e.filter(c=>c.status==='Cold').length;
+  const total=e.length, overdue=e.filter(c=>c.status==='Overdue').length,
+        warm=e.filter(c=>c.status==='Warm').length, cold=e.filter(c=>c.status==='Cold').length;
   document.getElementById('stats-row').innerHTML=`
     <div class="stat-card"><div class="stat-label">Network size</div><div class="stat-value">${total}</div></div>
     <div class="stat-card danger"><div class="stat-label">Overdue touches</div><div class="stat-value">${overdue}</div></div>
@@ -611,48 +698,50 @@ function renderStats(){
     <div class="stat-card success"><div class="stat-label">Cold contacts</div><div class="stat-value">${cold}</div></div>`;
 }
 
-// ── Table ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  TABLE
+// ═══════════════════════════════════════════════════════════════
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}renderTable();}
 function renderTable(){
-  const q=document.getElementById('searchInput')?.value.toLowerCase()||'';
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const fS=document.getElementById('filterStatus')?.value||'';
   const fP=document.getElementById('filterPriority')?.value||'';
   const fR=document.getElementById('filterRel')?.value||'';
   const fA=document.getElementById('filterAssigned')?.value||'';
   let rows=contacts.map(enrichContact).filter(c=>{
-    if(q&&!(c.name.toLowerCase().includes(q)||(c.company||'').toLowerCase().includes(q)||(c.title||'').toLowerCase().includes(q))) return false;
+    if(q&&!((c.name||'').toLowerCase().includes(q)||(c.company||'').toLowerCase().includes(q)||(c.title||'').toLowerCase().includes(q))) return false;
     if(fS&&c.status!==fS) return false;
     if(fP&&c.priority!==fP) return false;
     if(fR&&c.rel!==fR) return false;
     if(fA&&c.assigned!==fA) return false;
     return true;
   });
-  const priOrder={}; config.priorities.forEach((p,i)=>priOrder[p.name]=i);
+  const priOrder={};config.priorities.forEach((p,i)=>priOrder[p.name]=i);
   rows.sort((a,b)=>{
     let va,vb;
-    if(sortCol==='name'){va=a.name;vb=b.name;}
+    if(sortCol==='name'){va=a.name||'';vb=b.name||'';}
     else if(sortCol==='company'){va=a.company||'';vb=b.company||'';}
     else if(sortCol==='rel'){va=a.rel||'';vb=b.rel||'';}
     else if(sortCol==='status'){va=a.status||'';vb=b.status||'';}
-    else if(sortCol==='priority'){va=priOrder[a.priority]??99;vb=priOrder[b.priority]??99;return(va-vb)*sortDir;}
-    else if(sortCol==='days'){va=a.days??9999;vb=b.days??9999;return(va-vb)*sortDir;}
-    else if(sortCol==='lastTouch'){va=a.lastDateObj?a.lastDateObj.getTime():0;vb=b.lastDateObj?b.lastDateObj.getTime():0;return(va-vb)*sortDir;}
+    else if(sortCol==='priority'){return((priOrder[a.priority]??99)-(priOrder[b.priority]??99))*sortDir;}
+    else if(sortCol==='days'){return((a.days??9999)-(b.days??9999))*sortDir;}
+    else if(sortCol==='last_touch_date'){return((a.lastDateObj?.getTime()||0)-(b.lastDateObj?.getTime()||0))*sortDir;}
     else{va='';vb='';}
     return va<vb?-sortDir:va>vb?sortDir:0;
   });
-  ['name','company','rel','status','priority','days','lastTouch'].forEach(col=>{
+  ['name','company','rel','status','priority','days','last_touch_date'].forEach(col=>{
     const el=document.getElementById('sort-'+col);
     if(el){el.textContent=sortCol===col?(sortDir>0?'↑':'↓'):'↕';el.closest('th')?.classList.toggle('sorted',sortCol===col);}
   });
   const tb=document.getElementById('tableBody');
   if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-3);">No contacts match your filters.</td></tr>';return;}
   const statusBadge=s=>({Overdue:'<span class="badge badge-overdue">Overdue</span>',Warm:'<span class="badge badge-warm">Warm</span>',Cold:'<span class="badge badge-cold">Cold</span>',Passive:'<span class="badge badge-passive">Passive</span>'}[s]||'');
-  const priBadge=p=>{const cls={High:'badge-high',Mid:'badge-mid',Low:'badge-low'}[p]||'badge-low';return`<span class="badge ${cls}">${esc(p)}</span>`;};
-  const relBadge=r=>r==='Past Client'?'<span class="badge badge-past">Past client</span>':`<span class="badge badge-cold-type">${esc(r)}</span>`;
+  const priBadge=p=>{const cls={High:'badge-high',Mid:'badge-mid',Low:'badge-low'}[p]||'badge-low';return`<span class="badge ${cls}">${esc(p||'')}</span>`;};
+  const relBadge=r=>r==='Past Client'?'<span class="badge badge-past">Past client</span>':`<span class="badge badge-cold-type">${esc(r||'')}</span>`;
   const engBadge=e=>({'Positive Reply':'<span class="badge badge-positive">Positive reply</span>','Neutral/No Update':'<span class="badge badge-neutral">Neutral</span>','No Response (No Read Receipt)':'<span class="badge badge-noresponse">No response</span>','No Response':'<span class="badge badge-noresponse">No response</span>','Read & Ignored':'<span class="badge badge-ignored">Read & ignored</span>','Ghosted':'<span class="badge badge-ghosted">Ghosted</span>'}[e]||'');
   tb.innerHTML=rows.map(c=>{
     const days=c.days;
-    const daysPill=days!==null?`<span class="days-pill ${days<0?'days-overdue':days<30?'days-soon':'days-ok'}">${days<0?Math.abs(days)+'d overdue':days===0?'Today':days+'d'}</span>`:'' ;
+    const daysPill=days!==null?`<span class="days-pill ${days<0?'days-overdue':days<30?'days-soon':'days-ok'}">${days<0?Math.abs(days)+'d overdue':days===0?'Today':days+'d'}</span>`:'';
     const nextDate=c.nextTouchObj?`<div class="sub">${formatDate(c.nextTouchObj)}</div>`:'';
     const li=c.linkedin?`<a class="li-link" href="https://${c.linkedin.replace(/^https?:\/\//,'')}" target="_blank">LinkedIn ↗</a>`:'';
     return`<tr>
@@ -661,21 +750,23 @@ function renderTable(){
       <td>${relBadge(c.rel)}</td>
       <td>${statusBadge(c.status)}</td>
       <td>${priBadge(c.priority)}</td>
-      <td class="next-touch">${daysPill}${nextDate}</td>
-      <td style="font-size:12px;color:var(--text-2);">${c.lastDateObj?formatDate(c.lastDateObj):'—'}<div class="sub">${esc(c.lastType||'')}</div></td>
+      <td>${daysPill}${nextDate}</td>
+      <td style="font-size:12px;color:var(--text-2);">${c.lastDateObj?formatDate(c.lastDateObj):'—'}<div class="sub">${esc(c.last_touch_type||'')}</div></td>
       <td style="font-size:12px;">${esc(c.assigned||'')}</td>
       <td>${engBadge(c.engagement)}</td>
       <td><div class="row-actions">
-        <button class="icon-btn" title="Edit" onclick="openEditContact(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="icon-btn" title="Log touch" onclick="openAddLogForContact(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
-        <button class="icon-btn" title="Remove" onclick="openDeleteContact(${c.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
+        <button class="icon-btn" title="Edit" onclick="openEditContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn" title="Log touch" onclick="openAddLogForContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+        <button class="icon-btn" title="Remove" onclick="openDeleteContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
       </div></td>
     </tr>`;
   }).join('');
   renderStats();
 }
 
-// ── Contact CRUD ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  CONTACT CRUD
+// ═══════════════════════════════════════════════════════════════
 function openAddContact(){
   editingContactId=null;
   document.getElementById('modalTitle').textContent='Add contact';
@@ -685,7 +776,7 @@ function openAddContact(){
   document.getElementById('contactModal').style.display='flex';
 }
 function openEditContact(id){
-  const c=contacts.find(x=>x.id===id); if(!c) return;
+  const c=contacts.find(x=>String(x.id)===String(id)); if(!c) return;
   editingContactId=id;
   document.getElementById('modalTitle').textContent='Edit contact';
   document.getElementById('saveContactBtn').textContent='Update';
@@ -695,54 +786,85 @@ function openEditContact(id){
   document.getElementById('f-company').value=c.company||'';
   document.getElementById('f-linkedin').value=c.linkedin||'';
   document.getElementById('f-connection').value=c.connection||'';
-  document.getElementById('f-lastDate').value=c.lastDate||'';
-  document.getElementById('f-lastType').value=c.lastType||'';
+  document.getElementById('f-lastDate').value=c.last_touch_date||'';
+  document.getElementById('f-lastType').value=c.last_touch_type||'';
   document.getElementById('f-notes').value=c.notes||'';
   document.getElementById('contactModal').style.display='flex';
 }
-function saveContact(){
+async function saveContact(){
   const name=document.getElementById('f-name').value.trim();
   if(!name){alert('Name is required.');return;}
-  const c={name,title:document.getElementById('f-title').value.trim(),company:document.getElementById('f-company').value.trim(),linkedin:document.getElementById('f-linkedin').value.trim(),rel:document.getElementById('f-rel').value,connection:document.getElementById('f-connection').value.trim(),trigger:document.getElementById('f-trigger').value,lastDate:document.getElementById('f-lastDate').value||null,lastType:document.getElementById('f-lastType').value.trim(),lifecycle:document.getElementById('f-lifecycle').value,priority:document.getElementById('f-priority').value,assigned:document.getElementById('f-assigned').value,touchType:document.getElementById('f-touchtype').value,engagement:document.getElementById('f-engagement').value,notes:document.getElementById('f-notes').value.trim()};
-  if(editingContactId){const idx=contacts.findIndex(x=>x.id===editingContactId);contacts[idx]={...contacts[idx],...c};}
-  else{c.id=nextContactId++;contacts.push(c);}
-  closeModal('contactModal');renderTable();populateDynamicFilters();
+  const data={
+    id: editingContactId||undefined,
+    name, title:document.getElementById('f-title').value.trim(),
+    company:document.getElementById('f-company').value.trim(),
+    linkedin:document.getElementById('f-linkedin').value.trim(),
+    rel:document.getElementById('f-rel').value,
+    connection:document.getElementById('f-connection').value.trim(),
+    trigger:document.getElementById('f-trigger').value,
+    last_touch_date:document.getElementById('f-lastDate').value||null,
+    last_touch_type:document.getElementById('f-lastType').value.trim(),
+    lifecycle:document.getElementById('f-lifecycle').value,
+    priority:document.getElementById('f-priority').value,
+    assigned:document.getElementById('f-assigned').value,
+    touch_type:document.getElementById('f-touchtype').value,
+    engagement:document.getElementById('f-engagement').value,
+    notes:document.getElementById('f-notes').value.trim(),
+  };
+  setLoading('saveContactBtn',true);
+  try{
+    const saved=await dbUpsertContact(data);
+    if(editingContactId){ const idx=contacts.findIndex(x=>String(x.id)===String(editingContactId)); contacts[idx]=saved; }
+    else{ contacts.push(saved); contacts.sort((a,b)=>a.name.localeCompare(b.name)); }
+    closeModal('contactModal'); renderTable(); populateDynamicFilters();
+    toast(editingContactId?'Contact updated':'Contact added');
+  }catch(e){ toast('Error: '+e.message, true); }
+  finally{ setLoading('saveContactBtn',false); }
 }
 function openDeleteContact(id){
-  deleteTarget=id;deleteType='contact';
-  const c=contacts.find(x=>x.id===id);
+  deleteTarget=id; deleteType='contact';
+  const c=contacts.find(x=>String(x.id)===String(id));
   document.getElementById('deleteTitle').textContent='Remove contact?';
-  document.getElementById('deleteMsg').innerHTML=`This will permanently remove <strong>${esc(c?.name||'this contact')}</strong> from the tracker.`;
+  document.getElementById('deleteMsg').innerHTML=`This will permanently remove <strong>${esc(c?.name||'this contact')}</strong>.`;
   document.getElementById('deleteConfirmBtn').textContent='Remove contact';
   document.getElementById('deleteModal').style.display='flex';
 }
-function confirmDelete(){
-  if(deleteType==='contact') contacts=contacts.filter(c=>c.id!==deleteTarget);
-  if(deleteType==='template') templates=templates.filter(t=>t.id!==deleteTarget);
-  closeModal('deleteModal');
-  if(deleteType==='contact'){renderTable();populateDynamicFilters();}
-  if(deleteType==='template') renderTemplates();
+async function confirmDelete(){
+  try{
+    if(deleteType==='contact'){
+      await dbDeleteContact(deleteTarget);
+      contacts=contacts.filter(c=>String(c.id)!==String(deleteTarget));
+      closeModal('deleteModal'); renderTable(); populateDynamicFilters();
+      toast('Contact removed');
+    } else if(deleteType==='template'){
+      await dbDeleteTemplate(deleteTarget);
+      templates=templates.filter(t=>String(t.id)!==String(deleteTarget));
+      closeModal('deleteModal'); renderTemplates();
+      toast('Template deleted');
+    }
+  }catch(e){ toast('Error: '+e.message,true); }
 }
 
-// ── Log ────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  INTERACTION LOG
+// ═══════════════════════════════════════════════════════════════
 function renderLog(){
-  const sorted=[...interactionLog].sort((a,b)=>b.date.localeCompare(a.date));
   const el=document.getElementById('logList');
-  if(!sorted.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No interactions logged yet.</p></div>';return;}
+  if(!interactionLog.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No interactions logged yet.</p></div>';return;}
   const respBadge=r=>({'Positive Reply':'badge-positive','Neutral/No Update':'badge-neutral','No Response (No Read Receipt)':'badge-noresponse','No Response':'badge-noresponse','Ghosted':'badge-ghosted','Read & Ignored':'badge-ignored'}[r]||'badge-neutral');
-  el.innerHTML=sorted.map(l=>{
-    const initials=l.contact.split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase();
-    const tpl=l.template?templates.find(t=>String(t.id)===String(l.template)):null;
-    const tplLabel=tpl?`<span style="font-size:11px;color:var(--text-3);">${esc(tpl.name)} ·</span> `:`<span style="font-size:11px;color:var(--text-3);">Custom ·</span> `;
+  el.innerHTML=interactionLog.map(l=>{
+    const initials=(l.contact_name||'?').split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase();
+    const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
+    const tplLabel=tpl?`<span style="font-size:11px;color:var(--text-3);">${esc(tpl.name)} · </span>`:`<span style="font-size:11px;color:var(--text-3);">Custom · </span>`;
     return`<div class="log-item">
       <div class="log-avatar">${initials}</div>
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:500;">${esc(l.contact)}</span>
-          <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response)}</span>
+          <span style="font-size:13px;font-weight:500;">${esc(l.contact_name||'')}</span>
+          <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response||'')}</span>
         </div>
-        <div class="log-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type)} · ${tplLabel}</div>
-        <div class="log-note">${esc(l.notes)}</div>
+        <div class="log-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}</div>
+        <div class="log-note">${esc(l.notes||'')}</div>
       </div>
     </div>`;
   }).join('');
@@ -754,33 +876,50 @@ function openAddLog(preselect){
   document.getElementById('logModal').style.display='flex';
 }
 function openAddLogForContact(id){
-  const c=contacts.find(x=>x.id===id);
+  const c=contacts.find(x=>String(x.id)===String(id));
   openAddLog(c?.name||'');
 }
-function handleTemplateChange(){/* just a hook for future expansion */}
-function saveLog(){
+async function saveLog(){
   const contactName=document.getElementById('l-contact-value').value||document.getElementById('l-contact-input').value.trim();
   if(!contactName){alert('Please select a contact.');return;}
-  const entry={id:nextLogId++,date:document.getElementById('l-date').value,contact:contactName,type:document.getElementById('l-type').value,template:document.getElementById('l-template').value||'',notes:document.getElementById('l-notes').value.trim(),response:document.getElementById('l-response').value};
-  interactionLog.push(entry);
-  const c=contacts.find(x=>x.name===contactName);
-  if(c){c.lastDate=entry.date;c.lastType=entry.type;c.engagement=entry.response;}
-  closeModal('logModal');renderLog();
-  if(currentView==='tracker') renderTable();
+  const tmplId=document.getElementById('l-template').value||null;
+  const data={
+    date:document.getElementById('l-date').value,
+    contact_name:contactName,
+    type:document.getElementById('l-type').value,
+    template_id:tmplId,
+    response:document.getElementById('l-response').value,
+    notes:document.getElementById('l-notes').value.trim(),
+  };
+  setLoading('saveLogBtn',true);
+  try{
+    const saved=await dbInsertLog(data);
+    interactionLog.unshift(saved);
+    // Update contact's last touch
+    const c=contacts.find(x=>x.name===contactName);
+    if(c){
+      c.last_touch_date=data.date; c.last_touch_type=data.type; c.engagement=data.response;
+      await dbUpsertContact(c);
+    }
+    closeModal('logModal'); renderLog();
+    if(currentView==='tracker') renderTable();
+    toast('Interaction logged');
+  }catch(e){ toast('Error: '+e.message,true); }
+  finally{ setLoading('saveLogBtn',false); }
 }
 
-// ── Templates ──────────────────────────────────────────────────────────────
-// Template scoring ONLY counts entries where template is set (not custom/blank)
+// ═══════════════════════════════════════════════════════════════
+//  TEMPLATES
+// ═══════════════════════════════════════════════════════════════
 function getTemplateStats(){
   const stats={};
   templates.forEach(t=>{stats[t.id]={used:0,positive:0,ghosted:0};});
   interactionLog.forEach(l=>{
-    if(!l.template) return; // custom — excluded
-    const tid=parseInt(l.template);
-    if(!stats[tid]) return;
-    stats[tid].used++;
-    if(l.response==='Positive Reply') stats[tid].positive++;
-    if(l.response==='Ghosted') stats[tid].ghosted++;
+    if(!l.template_id) return;
+    const s=stats[l.template_id]; if(!s) return;
+    s.used++;
+    if(l.response==='Positive Reply') s.positive++;
+    if(l.response==='Ghosted') s.ghosted++;
   });
   return stats;
 }
@@ -807,10 +946,10 @@ function renderTemplates(){
           ${s.used?`<div class="template-bar" style="width:80px;margin-top:6px;"><div class="template-bar-fill" style="width:${Math.min(rate,100)}%"></div></div>`:''}
         </div>
       </div>
-      <div class="template-body" style="margin-bottom:12px;">${esc(t.body)}</div>
+      <div class="template-body-preview" style="margin-bottom:12px;">${esc(t.body)}</div>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-sm" onclick="openEditTemplate(${t.id})">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="openDeleteTemplate(${t.id})">Delete</button>
+        <button class="btn btn-sm" onclick="openEditTemplate('${t.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="openDeleteTemplate('${t.id}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -824,7 +963,7 @@ function openAddTemplate(){
   document.getElementById('templateModal').style.display='flex';
 }
 function openEditTemplate(id){
-  const t=templates.find(x=>x.id===id); if(!t) return;
+  const t=templates.find(x=>String(x.id)===String(id)); if(!t) return;
   editingTemplateId=id;
   document.getElementById('templateModalTitle').textContent='Edit template';
   document.getElementById('saveTemplateBtn').textContent='Update template';
@@ -832,39 +971,45 @@ function openEditTemplate(id){
   document.getElementById('t-body').value=t.body;
   document.getElementById('templateModal').style.display='flex';
 }
-function saveTemplate(){
+async function saveTemplate(){
   const name=document.getElementById('t-name').value.trim();
   const body=document.getElementById('t-body').value.trim();
   if(!name){alert('Name is required.');return;}
-  if(editingTemplateId){const idx=templates.findIndex(x=>x.id===editingTemplateId);templates[idx]={...templates[idx],name,body};}
-  else{templates.push({id:nextTemplateId++,name,body});}
-  closeModal('templateModal');renderTemplates();
+  setLoading('saveTemplateBtn',true);
+  try{
+    const saved=await dbUpsertTemplate({id:editingTemplateId||undefined,name,body});
+    if(editingTemplateId){ const idx=templates.findIndex(x=>String(x.id)===String(editingTemplateId)); templates[idx]=saved; }
+    else templates.push(saved);
+    closeModal('templateModal'); renderTemplates();
+    toast(editingTemplateId?'Template updated':'Template added');
+  }catch(e){ toast('Error: '+e.message,true); }
+  finally{ setLoading('saveTemplateBtn',false); }
 }
 function openDeleteTemplate(id){
-  deleteTarget=id;deleteType='template';
-  const t=templates.find(x=>x.id===id);
+  deleteTarget=id; deleteType='template';
+  const t=templates.find(x=>String(x.id)===String(id));
   document.getElementById('deleteTitle').textContent='Delete template?';
-  document.getElementById('deleteMsg').innerHTML=`This will permanently delete <strong>${esc(t?.name||'this template')}</strong>. Log entries that used it will show "Custom" instead.`;
+  document.getElementById('deleteMsg').innerHTML=`Permanently delete <strong>${esc(t?.name||'this template')}</strong>? Log entries will show "Custom" instead.`;
   document.getElementById('deleteConfirmBtn').textContent='Delete template';
   document.getElementById('deleteModal').style.display='flex';
 }
 
-// ── Summary ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  SUMMARY
+// ═══════════════════════════════════════════════════════════════
 function renderSummary(){
   const enriched=contacts.map(enrichContact);
   const stats=getTemplateStats();
   const byStatus={Overdue:0,Warm:0,Cold:0,Passive:0};
   const byPriority={};config.priorities.forEach(p=>byPriority[p.name]=0);
   enriched.forEach(c=>{byStatus[c.status]=(byStatus[c.status]||0)+1;if(byPriority[c.priority]!==undefined)byPriority[c.priority]++;});
-  const totalLogs=interactionLog.length;
-  const templateLogs=interactionLog.filter(l=>l.template).length;
-  const customLogs=totalLogs-templateLogs;
+  const totalLogs=interactionLog.length, templateLogs=interactionLog.filter(l=>l.template_id).length;
   const positiveReplies=interactionLog.filter(l=>l.response==='Positive Reply').length;
   const overallRate=totalLogs>0?Math.round((positiveReplies/totalLogs)*100):0;
   let bestT=null,bestRate=-1;
   Object.entries(stats).forEach(([id,s])=>{if(s.used<1) return;const r=s.positive/s.used;if(r>bestRate){bestRate=r;bestT=id;}});
-  const templateRows=templates.map(t=>{const s=stats[t.id]||{used:0,positive:0,ghosted:0};const r=s.used>0?Math.round((s.positive/s.used)*100):0;return`<tr><td style="font-size:13px;">${esc(t.name)}</td><td style="text-align:center;font-size:13px;">${s.used}</td><td style="text-align:center;font-size:13px;">${s.positive}</td><td style="text-align:center;font-size:13px;">${s.ghosted}</td><td style="text-align:center;font-size:13px;">${s.used?r+'%':'—'}</td></tr>`;}).join('');
   const bar=(v,total)=>`<div style="width:80px;height:4px;background:var(--border);border-radius:2px;"><div style="width:${total?Math.round(v/total*100):0}%;height:100%;background:var(--accent);border-radius:2px;"></div></div>`;
+  const templateRows=templates.map(t=>{const s=stats[t.id]||{used:0,positive:0,ghosted:0};const r=s.used>0?Math.round((s.positive/s.used)*100):0;return`<tr><td style="font-size:13px;">${esc(t.name)}</td><td style="text-align:center;font-size:13px;">${s.used}</td><td style="text-align:center;font-size:13px;">${s.positive}</td><td style="text-align:center;font-size:13px;">${s.ghosted}</td><td style="text-align:center;font-size:13px;">${s.used?r+'%':'—'}</td></tr>`;}).join('');
   document.getElementById('summaryContent').innerHTML=`
     <div class="stats-row" style="margin-bottom:16px;">
       <div class="stat-card"><div class="stat-label">Network size</div><div class="stat-value">${enriched.length}</div></div>
@@ -873,149 +1018,148 @@ function renderSummary(){
       <div class="stat-card"><div class="stat-label">Overall response</div><div class="stat-value">${overallRate}%</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-      <div class="template-card">
-        <div class="template-name" style="margin-bottom:12px;">Status breakdown</div>
+      <div class="template-card"><div class="template-name" style="margin-bottom:12px;">Status breakdown</div>
         ${Object.entries(byStatus).map(([k,v])=>`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text-2);">${k}</span><div style="display:flex;align-items:center;gap:8px;">${bar(v,enriched.length)}<span style="font-size:13px;font-weight:500;min-width:20px;text-align:right;">${v}</span></div></div>`).join('')}
       </div>
-      <div class="template-card">
-        <div class="template-name" style="margin-bottom:12px;">Priority breakdown</div>
+      <div class="template-card"><div class="template-name" style="margin-bottom:12px;">Priority breakdown</div>
         ${Object.entries(byPriority).map(([k,v])=>`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text-2);">${k}</span><div style="display:flex;align-items:center;gap:8px;">${bar(v,enriched.length)}<span style="font-size:13px;font-weight:500;min-width:20px;text-align:right;">${v}</span></div></div>`).join('')}
       </div>
     </div>
     <div class="template-card" style="margin-bottom:16px;">
       <div class="template-name" style="margin-bottom:4px;">Interaction breakdown</div>
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">Custom interactions are excluded from template scoring.</div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">Custom interactions excluded from template scoring.</div>
       <div style="display:flex;gap:24px;">
         <div><div class="stat-label" style="font-size:10px;">Template-based</div><div style="font-size:20px;font-weight:600;">${templateLogs}</div></div>
-        <div><div class="stat-label" style="font-size:10px;">Custom (no template)</div><div style="font-size:20px;font-weight:600;">${customLogs}</div></div>
+        <div><div class="stat-label" style="font-size:10px;">Custom</div><div style="font-size:20px;font-weight:600;">${totalLogs-templateLogs}</div></div>
         <div><div class="stat-label" style="font-size:10px;">Total logged</div><div style="font-size:20px;font-weight:600;">${totalLogs}</div></div>
       </div>
     </div>
     <div class="table-wrap">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;">Template scoring <span style="font-size:11px;font-weight:400;color:var(--text-3);">(custom interactions excluded)</span></div>
-      <div style="overflow-x:auto;"><table><thead><tr>
-        <th>Template</th><th style="text-align:center;">Uses</th><th style="text-align:center;">Positive replies</th><th style="text-align:center;">Ghosted</th><th style="text-align:center;">Response rate</th>
-      </tr></thead><tbody>${templateRows}</tbody></table></div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;">Template scoring <span style="font-size:11px;font-weight:400;color:var(--text-3);">(custom excluded)</span></div>
+      <div style="overflow-x:auto;"><table><thead><tr><th>Template</th><th style="text-align:center;">Uses</th><th style="text-align:center;">Positive replies</th><th style="text-align:center;">Ghosted</th><th style="text-align:center;">Response rate</th></tr></thead><tbody>${templateRows}</tbody></table></div>
     </div>
-    ${bestT?`<div style="margin-top:16px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:var(--radius-lg);padding:14px 16px;"><div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:2px;">Best performing template</div><div style="font-size:13px;color:var(--text);">${esc(templates.find(t=>String(t.id)===String(bestT))?.name||'Template '+bestT)} · ${Math.round(bestRate*100)}% response rate</div></div>`:''}`;
+    ${bestT?`<div style="margin-top:16px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:var(--radius-lg);padding:14px 16px;"><div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:2px;">Best performing template</div><div style="font-size:13px;">${esc(templates.find(t=>String(t.id)===String(bestT))?.name||'–')} · ${Math.round(bestRate*100)}% response rate</div></div>`:''}`;
 }
 
-// ── Settings ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════════════
 function renderSettings(){
-  document.getElementById('settingsContent').innerHTML=`
-  <div style="max-width:720px;">
-
+  document.getElementById('settingsContent').innerHTML=`<div style="max-width:720px;">
     <div class="settings-section">
       <div class="settings-title">Priority tiers & touch cadence</div>
-      <div class="settings-desc">Each tier's name and how many months between touches. All next-touch dates recalculate when you save.</div>
+      <div class="settings-desc">Each tier's name and how many months between touches. Changes apply immediately to all next-touch dates.</div>
       <div id="priority-rules"></div>
       <button class="btn btn-sm" onclick="addPriorityTier()" style="margin-top:4px;">+ Add tier</button>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Assignees</div>
       <div class="settings-desc">People who can be assigned to a contact.</div>
       <div class="tag-list" id="tags-assignees"></div>
       <div class="tag-add-row"><input type="text" id="new-assignee" placeholder="Add assignee…" onkeydown="if(event.key==='Enter')addTag('assignees','new-assignee')"><button class="btn btn-sm" onclick="addTag('assignees','new-assignee')">Add</button></div>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Relationship types</div>
       <div class="settings-desc">Categories for classifying contacts.</div>
       <div class="tag-list" id="tags-relationTypes"></div>
       <div class="tag-add-row"><input type="text" id="new-relType" placeholder="Add type…" onkeydown="if(event.key==='Enter')addTag('relationTypes','new-relType')"><button class="btn btn-sm" onclick="addTag('relationTypes','new-relType')">Add</button></div>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Triggers</div>
-      <div class="settings-desc">Reasons for reaching out to a contact.</div>
+      <div class="settings-desc">Reasons for reaching out.</div>
       <div class="tag-list" id="tags-triggers"></div>
       <div class="tag-add-row"><input type="text" id="new-trigger" placeholder="Add trigger…" onkeydown="if(event.key==='Enter')addTag('triggers','new-trigger')"><button class="btn btn-sm" onclick="addTag('triggers','new-trigger')">Add</button></div>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Touchpoint types</div>
       <div class="settings-desc">Channels used to reach out.</div>
       <div class="tag-list" id="tags-touchTypes"></div>
       <div class="tag-add-row"><input type="text" id="new-touchType" placeholder="Add channel…" onkeydown="if(event.key==='Enter')addTag('touchTypes','new-touchType')"><button class="btn btn-sm" onclick="addTag('touchTypes','new-touchType')">Add</button></div>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Response types</div>
       <div class="settings-desc">Possible outcomes after a touchpoint.</div>
       <div class="tag-list" id="tags-responseTypes"></div>
       <div class="tag-add-row"><input type="text" id="new-responseType" placeholder="Add response type…" onkeydown="if(event.key==='Enter')addTag('responseTypes','new-responseType')"><button class="btn btn-sm" onclick="addTag('responseTypes','new-responseType')">Add</button></div>
     </div>
-
     <div class="settings-section">
       <div class="settings-title">Lifecycle stages</div>
       <div class="settings-desc">Stages that describe where a contact is in the relationship.</div>
       <div class="tag-list" id="tags-lifecycleStages"></div>
       <div class="tag-add-row"><input type="text" id="new-lifecycle" placeholder="Add stage…" onkeydown="if(event.key==='Enter')addTag('lifecycleStages','new-lifecycle')"><button class="btn btn-sm" onclick="addTag('lifecycleStages','new-lifecycle')">Add</button></div>
     </div>
-
   </div>`;
   renderPriorityRules();
   ['assignees','relationTypes','triggers','touchTypes','responseTypes','lifecycleStages'].forEach(renderTagList);
 }
-
 function renderPriorityRules(){
   const el=document.getElementById('priority-rules'); if(!el) return;
   el.innerHTML=config.priorities.map((p,i)=>`
     <div class="priority-rule">
-      <input type="text" value="${esc(p.name)}" style="width:100px;" onchange="config.priorities[${i}].name=this.value;refreshAfterConfig();" placeholder="Tier name">
-      <input type="number" value="${p.months}" min="1" max="24" onchange="config.priorities[${i}].months=parseInt(this.value)||1;refreshAfterConfig();">
+      <input type="text" value="${esc(p.name)}" style="width:100px;" onchange="config.priorities[${i}].name=this.value;" placeholder="Tier name">
+      <input type="number" value="${p.months}" min="1" max="24" onchange="config.priorities[${i}].months=parseInt(this.value)||1;">
       <span class="priority-rule-label">months between touches</span>
-      <button class="icon-btn" style="margin-left:auto;" title="Remove tier" onclick="removePriorityTier(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <button class="icon-btn" style="margin-left:auto;" title="Remove" onclick="removePriorityTier(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>`).join('');
 }
-function addPriorityTier(){
-  config.priorities.push({name:'New tier',months:3});
-  renderPriorityRules();
-  refreshAfterConfig();
-}
+function addPriorityTier(){ config.priorities.push({name:'New tier',months:3}); renderPriorityRules(); }
 function removePriorityTier(i){
-  if(config.priorities.length<=1){alert('At least one priority tier is required.');return;}
-  config.priorities.splice(i,1);
-  renderPriorityRules();
-  refreshAfterConfig();
-}
-function refreshAfterConfig(){
-  // Re-render table so next-touch dates recalculate
-  if(currentView==='tracker') renderTable();
+  if(config.priorities.length<=1){alert('At least one priority tier required.');return;}
+  config.priorities.splice(i,1); renderPriorityRules();
 }
 function renderTagList(key){
   const el=document.getElementById('tags-'+key); if(!el) return;
-  el.innerHTML=(config[key]||[]).map((v,i)=>`<span class="tag">${esc(v)}<button class="tag-remove" onclick="removeTag('${key}',${i})" title="Remove">×</button></span>`).join('');
+  el.innerHTML=(config[key]||[]).map((v,i)=>`<span class="tag">${esc(v)}<button class="tag-remove" onclick="removeTag('${key}',${i})">×</button></span>`).join('');
 }
 function addTag(key,inputId){
-  const inp=document.getElementById(inputId);
-  const val=inp.value.trim(); if(!val) return;
-  if(config[key].includes(val)){inp.value='';return;}
-  config[key].push(val);
-  inp.value='';
-  renderTagList(key);
+  const inp=document.getElementById(inputId); const val=inp.value.trim(); if(!val) return;
+  if(!config[key].includes(val)) config[key].push(val);
+  inp.value=''; renderTagList(key);
 }
-function removeTag(key,i){
-  config[key].splice(i,1);
-  renderTagList(key);
+function removeTag(key,i){ config[key].splice(i,1); renderTagList(key); }
+async function saveSettings(){
+  setLoading('saveSettingsBtn',true);
+  try{
+    await dbSaveSettings();
+    populateDynamicFilters();
+    if(currentView==='tracker') renderTable();
+    toast('Settings saved');
+  }catch(e){ toast('Error: '+e.message,true); }
+  finally{ setLoading('saveSettingsBtn',false); }
 }
 
-// ── Export ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════════
 function exportCSV(){
   const headers=['Full Name','Title','Company','LinkedIn','Relationship Type','Connection','Trigger','Last Touch Date','Last Touch Type','Next Touch Date','Days Until Next Touch','Lifecycle','Priority','Status','Assigned To','Touch Type','Engagement','Notes'];
-  const rows=contacts.map(c=>{const e=enrichContact(c);return[c.name,c.title,c.company,c.linkedin,c.rel,c.connection,c.trigger,c.lastDate||'',c.lastType||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,c.priority,e.status,c.assigned,c.touchType,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`)});
+  const rows=contacts.map(c=>{const e=enrichContact(c);return[c.name,c.title,c.company,c.linkedin,c.rel,c.connection,c.trigger,c.last_touch_date||'',c.last_touch_type||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,c.priority,e.status,c.assigned,c.touch_type,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`)});
   const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='cs_contact_tracker.csv';a.click();
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
 function closeModal(id){document.getElementById(id).style.display='none';}
 function closeOnBackdrop(e,id){if(e.target===document.getElementById(id))closeModal(id);}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ── Init ───────────────────────────────────────────────────────────────────
-showView('tracker');
+// ═══════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════
+async function boot(){
+  if(!initSupabase()) return;
+  try{
+    await dbLoad();
+    document.getElementById('loading-overlay').style.display='none';
+    document.getElementById('app').style.display='flex';
+    showView('tracker');
+  }catch(e){
+    document.getElementById('loading-overlay').innerHTML=`<p style="color:var(--danger);font-size:13px;">Failed to load data: ${e.message}<br><br>Check your Supabase credentials and that the tables exist (see SETUP.md).</p>`;
+  }
+}
+boot();
 </script>
 </body>
 </html>
