@@ -37,6 +37,12 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 /* ── Toast ── */
 #toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;padding:10px 16px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;}
 #toast.show{opacity:1;}
+/* Persistent error banner — does not auto-dismiss */
+#error-banner{position:fixed;top:16px;left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--radius-lg);padding:14px 40px 14px 16px;z-index:998;display:none;box-shadow:0 8px 24px rgba(0,0,0,.1);}
+#error-banner .eb-title{font-size:13px;font-weight:600;color:var(--danger);margin-bottom:4px;}
+#error-banner .eb-detail{font-size:12px;color:var(--text-2);font-family:ui-monospace,monospace;word-break:break-word;line-height:1.5;}
+#error-banner .eb-close{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:16px;line-height:1;padding:2px;}
+#error-banner .eb-close:hover{color:var(--text);}
 /* ── Sidebar ── */
 .sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
 .sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;letter-spacing:-0.01em;}
@@ -193,6 +199,13 @@ textarea{resize:vertical;min-height:60px;}
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Persistent error banner (stays until dismissed) -->
+<div id="error-banner">
+  <button class="eb-close" onclick="document.getElementById('error-banner').style.display='none'">✕</button>
+  <div class="eb-title" id="eb-title">Something went wrong</div>
+  <div class="eb-detail" id="eb-detail"></div>
+</div>
+
 <div class="app" id="app" style="display:none;">
 <aside class="sidebar">
   <div class="sidebar-logo">CS<span>Tech</span> · Outreach</div>
@@ -309,9 +322,12 @@ textarea{resize:vertical;min-height:60px;}
   <div id="view-settings" style="display:none;flex-direction:column;">
     <div class="topbar">
       <div class="topbar-title">Settings</div>
-      <button class="btn btn-primary btn-sm" id="saveSettingsBtn" onclick="saveSettings()">Save settings</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="unsavedBadge" style="display:none;font-size:12px;color:var(--warm);font-weight:500;">● Unsaved changes</span>
+        <button class="btn btn-primary btn-sm" id="saveSettingsBtn" onclick="saveSettings()">Save settings</button>
+      </div>
     </div>
-    <div class="content" id="settingsContent"></div>
+    <div class="content" id="settingsContent" onchange="markSettingsDirty()" oninput="markSettingsDirty()"></div>
   </div>
 
   <!-- Guide -->
@@ -585,6 +601,21 @@ function toast(msg, isError=false){
   toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
 }
 
+// Persistent, dismissible error banner — used instead of a vanishing toast
+// whenever a write to Supabase fails, so the real error is easy to read/copy.
+function showErrorBanner(title, err){
+  const banner=document.getElementById('error-banner');
+  const detail=[
+    err?.message || String(err),
+    err?.details ? 'Details: '+err.details : '',
+    err?.hint ? 'Hint: '+err.hint : '',
+    err?.code ? 'Code: '+err.code : '',
+  ].filter(Boolean).join('\n');
+  document.getElementById('eb-title').textContent=title;
+  document.getElementById('eb-detail').textContent=detail;
+  banner.style.display='block';
+}
+
 function setLoading(btnId, loading){
   const btn=document.getElementById(btnId); if(!btn) return;
   btn.disabled=loading;
@@ -817,8 +848,11 @@ async function saveContact(){
     if(editingContactId){ const idx=contacts.findIndex(x=>String(x.id)===String(editingContactId)); contacts[idx]=saved; }
     else{ contacts.push(saved); contacts.sort((a,b)=>a.name.localeCompare(b.name)); }
     closeModal('contactModal'); renderTable(); populateDynamicFilters();
-    toast(editingContactId?'Contact updated':'Contact added');
-  }catch(e){ toast('Error: '+e.message, true); }
+    toast(editingContactId?'Contact updated in Supabase ✓':'Contact added to Supabase ✓');
+  }catch(e){
+    console.error('Failed to save contact:', e);
+    showErrorBanner('Contact failed to save', e);
+  }
   finally{ setLoading('saveContactBtn',false); }
 }
 function openDeleteContact(id){
@@ -842,7 +876,10 @@ async function confirmDelete(){
       closeModal('deleteModal'); renderTemplates();
       toast('Template deleted');
     }
-  }catch(e){ toast('Error: '+e.message,true); }
+  }catch(e){
+    console.error('Failed to delete:', e);
+    showErrorBanner('Delete failed', e);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -903,8 +940,11 @@ async function saveLog(){
     }
     closeModal('logModal'); renderLog();
     if(currentView==='tracker') renderTable();
-    toast('Interaction logged');
-  }catch(e){ toast('Error: '+e.message,true); }
+    toast('Interaction logged to Supabase ✓');
+  }catch(e){
+    console.error('Failed to save interaction log:', e);
+    showErrorBanner('Interaction failed to save', e);
+  }
   finally{ setLoading('saveLogBtn',false); }
 }
 
@@ -981,8 +1021,11 @@ async function saveTemplate(){
     if(editingTemplateId){ const idx=templates.findIndex(x=>String(x.id)===String(editingTemplateId)); templates[idx]=saved; }
     else templates.push(saved);
     closeModal('templateModal'); renderTemplates();
-    toast(editingTemplateId?'Template updated':'Template added');
-  }catch(e){ toast('Error: '+e.message,true); }
+    toast(editingTemplateId?'Template updated in Supabase ✓':'Template added to Supabase ✓');
+  }catch(e){
+    console.error('Failed to save template:', e);
+    showErrorBanner('Template failed to save', e);
+  }
   finally{ setLoading('saveTemplateBtn',false); }
 }
 function openDeleteTemplate(id){
@@ -1117,16 +1160,32 @@ function addTag(key,inputId){
   inp.value=''; renderTagList(key);
 }
 function removeTag(key,i){ config[key].splice(i,1); renderTagList(key); }
+let settingsDirty=false;
+function markSettingsDirty(){
+  settingsDirty=true;
+  const b=document.getElementById('unsavedBadge');
+  if(b) b.style.display='inline';
+}
 async function saveSettings(){
   setLoading('saveSettingsBtn',true);
   try{
     await dbSaveSettings();
     populateDynamicFilters();
     if(currentView==='tracker') renderTable();
-    toast('Settings saved');
-  }catch(e){ toast('Error: '+e.message,true); }
+    settingsDirty=false;
+    const b=document.getElementById('unsavedBadge');
+    if(b) b.style.display='none';
+    toast('Settings saved to Supabase ✓');
+  }catch(e){
+    console.error('Failed to save settings:', e);
+    showErrorBanner('Settings failed to save', e);
+  }
   finally{ setLoading('saveSettingsBtn',false); }
 }
+// Warn before leaving the tab/closing if settings haven't been saved
+window.addEventListener('beforeunload', e=>{
+  if(settingsDirty){ e.preventDefault(); e.returnValue=''; }
+});
 
 // ═══════════════════════════════════════════════════════════════
 //  EXPORT
@@ -1216,4 +1275,4 @@ function diagnosError(msg){
 boot();
 </script>
 </body>
-</html><!DOCTYPE html>
+</html>
