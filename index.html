@@ -176,6 +176,18 @@ textarea{resize:vertical;min-height:60px;}
 .priority-rule{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--border);}
 .priority-rule input[type=number]{width:80px;}
 .priority-rule-label{font-size:12px;color:var(--text-3);}
+/* Priority scoring criteria (Add/Edit contact) */
+.criteria-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:10px;}
+.criteria-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);cursor:pointer;user-select:none;}
+.criteria-item:hover{border-color:var(--border-strong);}
+.criteria-item input{margin:0;flex-shrink:0;}
+.criteria-item span:nth-child(2){flex:1;}
+.criteria-points{font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0;}
+.priority-result{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);}
+/* Settings: priority scoring criteria list */
+.crit-rule{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--border);}
+.crit-rule input[type=text]{flex:1;}
+.crit-rule input[type=number]{width:70px;}
 /* ── Empty ── */
 .empty{text-align:center;padding:48px 20px;color:var(--text-3);}
 .empty-icon{font-size:32px;margin-bottom:10px;}
@@ -368,7 +380,15 @@ New contacts — Fill all columns before marking active.</div></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Relationship type</label><select id="f-rel"></select></div>
-      <div class="form-group"><label>Priority</label><select id="f-priority"></select></div>
+      <div class="form-group"><label>Assigned to</label><select id="f-assigned"></select></div>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px;">
+      <label>Priority scoring <span style="font-weight:400;color:var(--text-3);">— select everything that applies to this contact</span></label>
+      <div id="f-priority-criteria" class="criteria-grid"></div>
+      <div id="f-priority-result" class="priority-result"></div>
+      <input type="hidden" id="f-priority">
+      <input type="hidden" id="f-priority-score">
+      <input type="hidden" id="f-priority-criteria-ids">
     </div>
     <div class="form-row">
       <div class="form-group"><label>Original CS Tech connection</label><input type="text" id="f-connection" placeholder="La Redoute project 2018–2022"></div>
@@ -380,11 +400,10 @@ New contacts — Fill all columns before marking active.</div></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Lifecycle stage</label><select id="f-lifecycle"></select></div>
-      <div class="form-group"><label>Assigned to</label><select id="f-assigned"></select></div>
+      <div class="form-group"><label>Touchpoint type</label><select id="f-touchtype"></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Touchpoint type</label><select id="f-touchtype"></select></div>
-      <div class="form-group"><label>Engagement type</label><select id="f-engagement"></select></div>
+      <div class="form-group full"><label>Engagement type</label><select id="f-engagement"></select></div>
     </div>
     <div class="form-group full"><label>Notes / context</label><textarea id="f-notes" rows="3" placeholder="Background, talking points, relationship context…"></textarea></div>
   </div>
@@ -484,7 +503,18 @@ let contacts = [];
 let interactionLog = [];
 let templates = [];
 let config = {
-  priorities: [{name:'High',months:3},{name:'Mid',months:4},{name:'Low',months:6}],
+  priorities: [{name:'High',months:3,minScore:20},{name:'Mid',months:4,minScore:12},{name:'Low',months:6,minScore:0}],
+  priorityCriteria: [
+    {id:'decision_maker',    label:'Decision maker',                    points:5},
+    {id:'prev_success',      label:'Previous successful project',       points:4},
+    {id:'strong_relationship',label:'Strong relationship',              points:4},
+    {id:'referred_business', label:'Has referred business before',      points:5},
+    {id:'high_potential',    label:'High future project potential',    points:4},
+    {id:'recent_interaction',label:'Recently interacted (<6 months)',   points:2},
+    {id:'multiple_projects', label:'Multiple completed projects',       points:3},
+    {id:'target_industry',   label:'Works in target industry',         points:2},
+    {id:'active_linkedin',   label:'Active on LinkedIn',                points:1},
+  ],
   assignees: ['Anthony Borg','Team Lead'],
   relationTypes: ['Past Client','Cold Target','Warm Lead'],
   triggers: ['Standard Check-in','Funding Announcement','New Initiative','Organisational Restructure','Industry Regulation Change','Technology Shift','Technical Disruption','Public Milestone','System Update'],
@@ -492,6 +522,30 @@ let config = {
   responseTypes: ['Positive Reply','Neutral/No Update','No Response (No Read Receipt)','No Response','Read & Ignored','Ghosted'],
   lifecycleStages: ['Active','Passive','Transition','Reactivation'],
 };
+
+// Fills in any keys missing from an older saved config (e.g. before scoring existed)
+function normalizeConfig(){
+  if(!Array.isArray(config.priorityCriteria) || !config.priorityCriteria.length){
+    config.priorityCriteria=[
+      {id:'decision_maker',    label:'Decision maker',                  points:5},
+      {id:'prev_success',      label:'Previous successful project',     points:4},
+      {id:'strong_relationship',label:'Strong relationship',            points:4},
+      {id:'referred_business', label:'Has referred business before',    points:5},
+      {id:'high_potential',    label:'High future project potential',  points:4},
+      {id:'recent_interaction',label:'Recently interacted (<6 months)', points:2},
+      {id:'multiple_projects', label:'Multiple completed projects',     points:3},
+      {id:'target_industry',   label:'Works in target industry',       points:2},
+      {id:'active_linkedin',   label:'Active on LinkedIn',              points:1},
+    ];
+  }
+  const fallbackMin=[20,12,0];
+  config.priorities=(config.priorities||[]).map((p,i)=>({
+    name: p.name || (['High','Mid','Low'][i] || ('Tier '+(i+1))),
+    months: p.months || 3,
+    minScore: (p.minScore!==undefined && p.minScore!==null) ? p.minScore : (fallbackMin[i]!==undefined?fallbackMin[i]:0),
+  }));
+  if(!config.priorities.length) config.priorities=[{name:'Low',months:6,minScore:0}];
+}
 
 let sortCol = 'days', sortDir = 1;
 let editingContactId = null, editingTemplateId = null;
@@ -509,6 +563,27 @@ function daysDiff(d){ if(!d) return null; return Math.round((d-today)/86400000);
 function edate(base,months){ if(!base) return null; const r=new Date(base); r.setMonth(r.getMonth()+months); return r; }
 function monthsForPriority(p){ const t=config.priorities.find(x=>x.name===p); return t?t.months:3; }
 function calcNextTouch(lastDate,priority){ return edate(lastDate||today, monthsForPriority(priority)); }
+
+// ── Priority scoring ──
+function getSortedPriorityTiers(){ return [...config.priorities].sort((a,b)=>(b.minScore??0)-(a.minScore??0)); }
+function computeScore(criteriaIds){
+  return (criteriaIds||[]).reduce((sum,id)=>{
+    const c=config.priorityCriteria.find(x=>x.id===id);
+    return sum + (c?c.points:0);
+  },0);
+}
+function computePriorityFromScore(score){
+  const tiers=getSortedPriorityTiers();
+  for(const t of tiers){ if(score >= (t.minScore??0)) return t.name; }
+  return tiers.length?tiers[tiers.length-1].name:'Low';
+}
+function tierRankClass(tierName){
+  const tiers=getSortedPriorityTiers();
+  const idx=tiers.findIndex(t=>t.name===tierName);
+  if(idx===0) return 'high';
+  if(idx===1) return 'mid';
+  return 'low';
+}
 function calcStatus(lastDate,nextTouch){
   if(!lastDate) return 'Cold';
   if(daysDiff(nextTouch)<0) return 'Overdue';
@@ -538,6 +613,7 @@ async function dbLoad(){
   interactionLog = l.data || [];
   templates = t.data || [];
   if(s.data?.config) config = {...config, ...s.data.config};
+  normalizeConfig();
 }
 
 async function dbUpsertContact(data){
@@ -546,7 +622,9 @@ async function dbUpsertContact(data){
     linkedin: data.linkedin, rel: data.rel, connection: data.connection,
     trigger: data.trigger, last_touch_date: data.last_touch_date||null,
     last_touch_type: data.last_touch_type, lifecycle: data.lifecycle,
-    priority: data.priority, assigned: data.assigned,
+    priority: data.priority, priority_score: data.priority_score||0,
+    priority_criteria: data.priority_criteria||[],
+    assigned: data.assigned,
     touch_type: data.touch_type, engagement: data.engagement, notes: data.notes,
   };
   if(data.id){ row.id = data.id; }
@@ -698,12 +776,32 @@ function populateDynamicFilters(){
 }
 function populateContactForm(c){
   populateSelect('f-rel',config.relationTypes,c?.rel);
-  populateSelect('f-priority',config.priorities.map(p=>p.name),c?.priority);
   populateSelect('f-trigger',config.triggers,c?.trigger);
   populateSelect('f-lifecycle',config.lifecycleStages,c?.lifecycle);
   populateSelect('f-assigned',config.assignees,c?.assigned);
   populateSelect('f-touchtype',config.touchTypes,c?.touch_type);
   populateSelect('f-engagement',config.responseTypes,c?.engagement);
+  renderPriorityCriteriaCheckboxes(c?.priority_criteria||[]);
+  recalcPriorityForm();
+}
+function renderPriorityCriteriaCheckboxes(selectedIds){
+  const el=document.getElementById('f-priority-criteria'); if(!el) return;
+  el.innerHTML=config.priorityCriteria.map(c=>`
+    <label class="criteria-item">
+      <input type="checkbox" value="${esc(c.id)}" ${selectedIds.includes(c.id)?'checked':''} onchange="recalcPriorityForm()">
+      <span>${esc(c.label)}</span>
+      <span class="criteria-points">+${c.points}</span>
+    </label>`).join('');
+}
+function recalcPriorityForm(){
+  const checked=[...document.querySelectorAll('#f-priority-criteria input:checked')].map(i=>i.value);
+  const score=computeScore(checked);
+  const tier=computePriorityFromScore(score);
+  document.getElementById('f-priority').value=tier;
+  document.getElementById('f-priority-score').value=score;
+  document.getElementById('f-priority-criteria-ids').value=JSON.stringify(checked);
+  const resultEl=document.getElementById('f-priority-result');
+  if(resultEl) resultEl.innerHTML=`<span class="badge badge-${tierRankClass(tier)}">${esc(tier)} priority</span><span>${score} points</span>`;
 }
 function populateLogForm(preselect){
   const tEl=document.getElementById('l-type');
@@ -767,7 +865,7 @@ function renderTable(){
   const tb=document.getElementById('tableBody');
   if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-3);">No contacts match your filters.</td></tr>';return;}
   const statusBadge=s=>({Overdue:'<span class="badge badge-overdue">Overdue</span>',Warm:'<span class="badge badge-warm">Warm</span>',Cold:'<span class="badge badge-cold">Cold</span>',Passive:'<span class="badge badge-passive">Passive</span>'}[s]||'');
-  const priBadge=p=>{const cls={High:'badge-high',Mid:'badge-mid',Low:'badge-low'}[p]||'badge-low';return`<span class="badge ${cls}">${esc(p||'')}</span>`;};
+  const priBadge=p=>`<span class="badge badge-${tierRankClass(p)}">${esc(p||'')}</span>`;
   const relBadge=r=>r==='Past Client'?'<span class="badge badge-past">Past client</span>':`<span class="badge badge-cold-type">${esc(r||'')}</span>`;
   const engBadge=e=>({'Positive Reply':'<span class="badge badge-positive">Positive reply</span>','Neutral/No Update':'<span class="badge badge-neutral">Neutral</span>','No Response (No Read Receipt)':'<span class="badge badge-noresponse">No response</span>','No Response':'<span class="badge badge-noresponse">No response</span>','Read & Ignored':'<span class="badge badge-ignored">Read & ignored</span>','Ghosted':'<span class="badge badge-ghosted">Ghosted</span>'}[e]||'');
   tb.innerHTML=rows.map(c=>{
@@ -837,6 +935,8 @@ async function saveContact(){
     last_touch_type:document.getElementById('f-lastType').value.trim(),
     lifecycle:document.getElementById('f-lifecycle').value,
     priority:document.getElementById('f-priority').value,
+    priority_score:parseInt(document.getElementById('f-priority-score').value)||0,
+    priority_criteria:JSON.parse(document.getElementById('f-priority-criteria-ids').value||'[]'),
     assigned:document.getElementById('f-assigned').value,
     touch_type:document.getElementById('f-touchtype').value,
     engagement:document.getElementById('f-engagement').value,
@@ -1091,9 +1191,15 @@ function renderSettings(){
   document.getElementById('settingsContent').innerHTML=`<div style="max-width:720px;">
     <div class="settings-section">
       <div class="settings-title">Priority tiers & touch cadence</div>
-      <div class="settings-desc">Each tier's name and how many months between touches. Changes apply immediately to all next-touch dates.</div>
+      <div class="settings-desc">Each tier's name, months between touches, and the minimum score required to reach that tier. Changes apply immediately.</div>
       <div id="priority-rules"></div>
       <button class="btn btn-sm" onclick="addPriorityTier()" style="margin-top:4px;">+ Add tier</button>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">Priority scoring criteria</div>
+      <div class="settings-desc">Checkboxes shown when adding/editing a contact. Each contact's priority is calculated automatically from the points of everything checked.</div>
+      <div id="priority-criteria-rules"></div>
+      <button class="btn btn-sm" onclick="addPriorityCriterion()" style="margin-top:4px;">+ Add criterion</button>
     </div>
     <div class="settings-section">
       <div class="settings-title">Assignees</div>
@@ -1133,22 +1239,46 @@ function renderSettings(){
     </div>
   </div>`;
   renderPriorityRules();
+  renderPriorityCriteriaRules();
   ['assignees','relationTypes','triggers','touchTypes','responseTypes','lifecycleStages'].forEach(renderTagList);
 }
 function renderPriorityRules(){
   const el=document.getElementById('priority-rules'); if(!el) return;
   el.innerHTML=config.priorities.map((p,i)=>`
     <div class="priority-rule">
-      <input type="text" value="${esc(p.name)}" style="width:100px;" onchange="config.priorities[${i}].name=this.value;" placeholder="Tier name">
+      <input type="text" value="${esc(p.name)}" style="width:100px;" onchange="config.priorities[${i}].name=this.value;refreshPriorityDependents();" placeholder="Tier name">
       <input type="number" value="${p.months}" min="1" max="24" onchange="config.priorities[${i}].months=parseInt(this.value)||1;">
       <span class="priority-rule-label">months between touches</span>
+      <input type="number" value="${p.minScore??0}" min="0" max="999" style="width:70px;" onchange="config.priorities[${i}].minScore=parseInt(this.value)||0;refreshPriorityDependents();">
+      <span class="priority-rule-label">min score</span>
       <button class="icon-btn" style="margin-left:auto;" title="Remove" onclick="removePriorityTier(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>`).join('');
 }
-function addPriorityTier(){ config.priorities.push({name:'New tier',months:3}); renderPriorityRules(); }
+function addPriorityTier(){ config.priorities.push({name:'New tier',months:3,minScore:0}); renderPriorityRules(); }
 function removePriorityTier(i){
   if(config.priorities.length<=1){alert('At least one priority tier required.');return;}
   config.priorities.splice(i,1); renderPriorityRules();
+}
+function renderPriorityCriteriaRules(){
+  const el=document.getElementById('priority-criteria-rules'); if(!el) return;
+  el.innerHTML=config.priorityCriteria.map((c,i)=>`
+    <div class="crit-rule">
+      <input type="text" value="${esc(c.label)}" onchange="config.priorityCriteria[${i}].label=this.value;">
+      <input type="number" value="${c.points}" min="-20" max="20" onchange="config.priorityCriteria[${i}].points=parseInt(this.value)||0;">
+      <span class="priority-rule-label">points</span>
+      <button class="icon-btn" title="Remove" onclick="removePriorityCriterion(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>`).join('');
+}
+function addPriorityCriterion(){
+  config.priorityCriteria.push({id:'custom_'+Date.now(),label:'New criterion',points:1});
+  renderPriorityCriteriaRules();
+}
+function removePriorityCriterion(i){
+  if(config.priorityCriteria.length<=1){alert('At least one criterion required.');return;}
+  config.priorityCriteria.splice(i,1); renderPriorityCriteriaRules();
+}
+function refreshPriorityDependents(){
+  if(currentView==='tracker') renderTable();
 }
 function renderTagList(key){
   const el=document.getElementById('tags-'+key); if(!el) return;
