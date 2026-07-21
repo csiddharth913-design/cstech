@@ -95,6 +95,16 @@ td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:middle
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--bg);}
 .name-cell{font-weight:500;}
+.name-link{cursor:pointer;}
+.name-link:hover{text-decoration:underline;color:var(--accent);}
+.important-dates-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.important-date-row{display:flex;gap:8px;align-items:center;}
+.important-date-row input[type=text]{flex:1;}
+.important-date-row input[type=date]{width:160px;}
+.upcoming-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+.upcoming-item:last-child{border-bottom:none;}
+.card-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;font-size:13px;}
+.card-info-grid .label{color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:2px;}
 .sub{font-size:12px;color:var(--text-3);margin-top:1px;}
 .li-link{color:var(--accent);font-size:12px;text-decoration:none;}
 .li-link:hover{text-decoration:underline;}
@@ -183,7 +193,12 @@ textarea{resize:vertical;min-height:60px;}
 .criteria-item input{margin:0;flex-shrink:0;}
 .criteria-item span:nth-child(2){flex:1;}
 .criteria-points{font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0;}
-.priority-result{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);}
+.priority-result{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);flex-wrap:wrap;}
+.auto-signals{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);}
+.auto-signal{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
+.auto-signal-good{color:var(--success);}
+.auto-signal-bad{color:var(--danger);}
+.auto-signal .criteria-points{margin-left:auto;font-weight:600;}
 /* Settings: priority scoring criteria list */
 .crit-rule{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--border);}
 .crit-rule input[type=text]{flex:1;}
@@ -263,6 +278,7 @@ textarea{resize:vertical;min-height:60px;}
     </div>
     <div class="content">
       <div class="stats-row" id="stats-row"></div>
+      <div id="upcoming-dates-panel"></div>
       <div class="table-wrap">
         <div class="table-toolbar">
           <div class="search-box">
@@ -353,13 +369,9 @@ Overdue — Past the next touch date.
 Cold — Never been touched.
 Passive — Touched before, but not recently overdue.</div></div>
         <div class="template-card"><div class="template-name">Touch cadence</div><div class="template-body-preview">Cadence is set per priority tier in Settings. High = 3 months by default, Mid = 4, Low = 6. All next-touch dates recalculate automatically when you change these.</div></div>
-        <div class="template-card"><div class="template-name">Important notes</div><div class="template-body-preview">Updates — After every touch, log the interaction to keep the tracker current.
+        <div class="template-card"><div class="template-name">Important notes</div><div class="template-body-preview">Sign-off — All outreach must be reviewed by a senior team member.
+Updates — After every touch, log the interaction to keep the tracker current.
 New contacts — Fill all columns before marking active.</div></div>
-        <div class="template-card"><div class="template-name">Lifecycle Stage</div><div class="template-body-preview"> This can be viewed in the contact information
-Passive — The messaging strategy should focus purely on establishing initial visibility. e.g liking a LinkedIn post or sending congratulations.
-Active — Keep this relationship warm by sending touchpoints every few months. 
-Transition — A major external event has fundamentally changed their situation (like a job change), you must change your messaging to acknowledge the change in the situation. 
-Reactivation — This contact was once "Active," but they have gone completely cold, their contact may be Overdue in the status column. You need to change your strategy.</div></div>
       </div>
     </div>
   </div>
@@ -375,7 +387,7 @@ Reactivation — This contact was once "Active," but they have gone completely c
   </div>
   <div class="modal-body">
     <div class="form-row">
-      <div class="form-group"><label>Full name</label><input type="text" id="f-name" placeholder="Sophie Martin"></div>
+      <div class="form-group"><label>Full name</label><input type="text" id="f-name" placeholder="Sophie Martin" oninput="recalcPriorityForm()"></div>
       <div class="form-group"><label>Current title</label><input type="text" id="f-title" placeholder="Head of eCommerce"></div>
     </div>
     <div class="form-row">
@@ -386,21 +398,30 @@ Reactivation — This contact was once "Active," but they have gone completely c
       <div class="form-group"><label>Relationship type</label><select id="f-rel"></select></div>
       <div class="form-group"><label>Assigned to</label><select id="f-assigned"></select></div>
     </div>
-    <div class="form-group full" style="margin-bottom:14px;">
-      <label>Priority scoring <span style="font-weight:400;color:var(--text-3);">— select everything that applies to this contact</span></label>
-      <div id="f-priority-criteria" class="criteria-grid"></div>
-      <div id="f-priority-result" class="priority-result"></div>
-      <input type="hidden" id="f-priority">
-      <input type="hidden" id="f-priority-score">
-      <input type="hidden" id="f-priority-criteria-ids">
-    </div>
     <div class="form-row">
       <div class="form-group"><label>Original CS Tech connection</label><input type="text" id="f-connection" placeholder="La Redoute project 2018–2022"></div>
       <div class="form-group"><label>Trigger</label><select id="f-trigger"></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Last touch date</label><input type="date" id="f-lastDate"></div>
+      <div class="form-group"><label>Last touch date</label><input type="date" id="f-lastDate" onchange="recalcPriorityForm()"></div>
       <div class="form-group"><label>Last touch type</label><input type="text" id="f-lastType" placeholder="Email, LinkedIn message, Coffee…"></div>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px;">
+      <label>Key dates <span style="font-weight:400;color:var(--text-3);">— optional, shown as upcoming reminders on the dashboard</span></label>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group"><label style="font-weight:400;font-size:12px;">Birthday</label><input type="date" id="f-birthday"></div>
+      </div>
+      <div id="f-important-dates" class="important-dates-list"></div>
+      <button type="button" class="btn btn-sm" onclick="addImportantDateRow()">+ Add another date</button>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px;">
+      <label>Priority scoring <span style="font-weight:400;color:var(--text-3);">— check everything that applies; the signals below fill in on their own</span></label>
+      <div id="f-priority-criteria" class="criteria-grid"></div>
+      <div id="f-auto-signals" class="auto-signals"></div>
+      <div id="f-priority-result" class="priority-result"></div>
+      <input type="hidden" id="f-priority">
+      <input type="hidden" id="f-priority-score">
+      <input type="hidden" id="f-priority-criteria-ids">
     </div>
     <div class="form-row">
       <div class="form-group"><label>Lifecycle stage</label><select id="f-lifecycle"></select></div>
@@ -441,6 +462,10 @@ Reactivation — This contact was once "Active," but they have gone completely c
       <div class="form-group"><label>Touchpoint type</label><select id="l-type"></select></div>
       <div class="form-group"><label>Template used</label><select id="l-template"><option value="">— no template (custom) —</option></select></div>
     </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Reply to <span style="font-weight:400;color:var(--text-3);">(optional — links this to an earlier interaction with them)</span></label>
+      <select id="l-reply-to"><option value="">— standalone / new thread —</option></select>
+    </div>
     <div class="form-group" style="margin-bottom:12px;"><label>Response type</label><select id="l-response"></select></div>
     <div class="form-group"><label>Notes / outcome</label><textarea id="l-notes" rows="3" placeholder="What happened, key takeaways…"></textarea></div>
   </div>
@@ -465,6 +490,22 @@ Reactivation — This contact was once "Active," but they have gone completely c
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('templateModal')">Cancel</button>
     <button class="btn btn-primary" id="saveTemplateBtn" onclick="saveTemplate()">Save template</button>
+  </div>
+</div>
+</div>
+
+<!-- Contact card -->
+<div class="modal-backdrop" id="contactCardModal" style="display:none;" onclick="closeOnBackdrop(event,'contactCardModal')">
+<div class="modal" style="width:680px;" onclick="event.stopPropagation()">
+  <div class="modal-header">
+    <div class="modal-title" id="cardTitle">Contact card</div>
+    <button class="icon-btn" onclick="closeModal('contactCardModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body" id="contactCardBody"></div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('contactCardModal')">Close</button>
+    <button class="btn" id="cardLogBtn">Log interaction</button>
+    <button class="btn btn-primary" id="cardEditBtn">Edit contact</button>
   </div>
 </div>
 </div>
@@ -514,10 +555,12 @@ let config = {
     {id:'strong_relationship',label:'Strong relationship',              points:4},
     {id:'referred_business', label:'Has referred business before',      points:5},
     {id:'high_potential',    label:'High future project potential',    points:4},
-    {id:'recent_interaction',label:'Recently interacted (<6 months)',   points:2},
     {id:'multiple_projects', label:'Multiple completed projects',       points:3},
     {id:'target_industry',   label:'Works in target industry',         points:2},
     {id:'active_linkedin',   label:'Active on LinkedIn',                points:1},
+    {id:'recent_interaction',   label:'Recently interacted (<6 months)',            points:2,  auto:true},
+    {id:'high_responsiveness',  label:'High responsiveness (>50% positive replies)',points:3,  auto:true},
+    {id:'lapsed_lead',          label:'Lapsed lead (>12 months silent)',            points:-5, auto:true},
   ],
   assignees: ['Anthony Borg','Team Lead'],
   relationTypes: ['Past Client','Cold Target','Warm Lead'],
@@ -529,18 +572,31 @@ let config = {
 
 // Fills in any keys missing from an older saved config (e.g. before scoring existed)
 function normalizeConfig(){
-  if(!Array.isArray(config.priorityCriteria) || !config.priorityCriteria.length){
-    config.priorityCriteria=[
+  if(!Array.isArray(config.priorityCriteria)) config.priorityCriteria=[];
+  const autoDefaults=[
+    {id:'recent_interaction',  label:'Recently interacted (<6 months)',            points:2,  auto:true},
+    {id:'high_responsiveness', label:'High responsiveness (>50% positive replies)',points:3,  auto:true},
+    {id:'lapsed_lead',         label:'Lapsed lead (>12 months silent)',            points:-5, auto:true},
+  ];
+  // Add any missing automated criteria, and upgrade legacy manual entries (e.g. an
+  // old "recent_interaction" checkbox from before this feature) to automatic in place.
+  autoDefaults.forEach(def=>{
+    const existing=config.priorityCriteria.find(c=>c.id===def.id);
+    if(existing) existing.auto=true;
+    else config.priorityCriteria.push(def);
+  });
+  // First-ever run (nothing saved before): seed the manual criteria too.
+  if(config.priorityCriteria.length===autoDefaults.length){
+    config.priorityCriteria.unshift(
       {id:'decision_maker',    label:'Decision maker',                  points:5},
       {id:'prev_success',      label:'Previous successful project',     points:4},
       {id:'strong_relationship',label:'Strong relationship',            points:4},
       {id:'referred_business', label:'Has referred business before',    points:5},
       {id:'high_potential',    label:'High future project potential',  points:4},
-      {id:'recent_interaction',label:'Recently interacted (<6 months)', points:2},
       {id:'multiple_projects', label:'Multiple completed projects',     points:3},
       {id:'target_industry',   label:'Works in target industry',       points:2},
       {id:'active_linkedin',   label:'Active on LinkedIn',              points:1},
-    ];
+    );
   }
   const fallbackMin=[20,12,0];
   config.priorities=(config.priorities||[]).map((p,i)=>({
@@ -556,6 +612,7 @@ let editingContactId = null, editingTemplateId = null;
 let deleteTarget = null, deleteType = null;
 let currentView = 'tracker';
 let comboboxFocusIdx = -1;
+let currentImportantDates = []; // in-memory list of {label,date} while the contact modal is open
 
 // ═══════════════════════════════════════════════════════════════
 //  DATE HELPERS
@@ -565,6 +622,31 @@ function parseDate(s){ if(!s) return null; const d=new Date(s); return isNaN(d)?
 function formatDate(d){ if(!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function daysDiff(d){ if(!d) return null; return Math.round((d-today)/86400000); }
 function edate(base,months){ if(!base) return null; const r=new Date(base); r.setMonth(r.getMonth()+months); return r; }
+
+// Given a stored date (birthday, anniversary, etc.), returns its next annual occurrence from today.
+function nextOccurrence(dateStr){
+  const d=parseDate(dateStr); if(!d) return null;
+  const thisYear=new Date(today.getFullYear(), d.getMonth(), d.getDate());
+  if(thisYear>=today) return thisYear;
+  return new Date(today.getFullYear()+1, d.getMonth(), d.getDate());
+}
+// Gathers all contacts' birthdays + custom important dates falling within the next N days.
+function computeUpcomingDates(daysAhead=30){
+  const items=[];
+  contacts.forEach(c=>{
+    if(c.birthday){
+      const occ=nextOccurrence(c.birthday);
+      if(occ){ const days=Math.round((occ-today)/86400000); if(days<=daysAhead) items.push({contactId:c.id,name:c.name,label:'Birthday',date:occ,days}); }
+    }
+    (c.important_dates||[]).forEach(d=>{
+      if(!d.date) return;
+      const occ=nextOccurrence(d.date);
+      if(occ){ const days=Math.round((occ-today)/86400000); if(days<=daysAhead) items.push({contactId:c.id,name:c.name,label:d.label||'Important date',date:occ,days}); }
+    });
+  });
+  items.sort((a,b)=>a.days-b.days);
+  return items;
+}
 function monthsForPriority(p){ const t=config.priorities.find(x=>x.name===p); return t?t.months:3; }
 function calcNextTouch(lastDate,priority){ return edate(lastDate||today, monthsForPriority(priority)); }
 
@@ -588,6 +670,39 @@ function tierRankClass(tierName){
   if(idx===1) return 'mid';
   return 'low';
 }
+// Computes the three automated signals for a contact ({name, last_touch_date}).
+// Reads the live interactionLog, so results always reflect the latest logged touches.
+function computeAutoCriteriaResults(contact){
+  const results=[];
+  const lastDate=parseDate(contact.last_touch_date);
+  const daysSince=lastDate?Math.round((today-lastDate)/86400000):null;
+  const logs=interactionLog.filter(l=>l.contact_name===contact.name);
+
+  const recentCrit=config.priorityCriteria.find(c=>c.id==='recent_interaction');
+  if(recentCrit) results.push({...recentCrit, active: daysSince!==null && daysSince<183});
+
+  const respCrit=config.priorityCriteria.find(c=>c.id==='high_responsiveness');
+  if(respCrit){
+    const total=logs.length;
+    const positive=logs.filter(l=>l.response==='Positive Reply').length;
+    results.push({...respCrit, active: total>0 && (positive/total)>0.5});
+  }
+
+  const lapsedCrit=config.priorityCriteria.find(c=>c.id==='lapsed_lead');
+  if(lapsedCrit) results.push({...lapsedCrit, active: daysSince!==null && daysSince>365});
+
+  return results;
+}
+// Manual (checked) points + automated (live) points = total live score for a contact.
+function computeLiveScore(contact){
+  const manualIds=(contact.priority_criteria||[]).filter(id=>{
+    const c=config.priorityCriteria.find(x=>x.id===id);
+    return c && !c.auto;
+  });
+  const manualScore=computeScore(manualIds);
+  const autoScore=computeAutoCriteriaResults(contact).reduce((s,r)=>s+(r.active?r.points:0),0);
+  return manualScore+autoScore;
+}
 function calcStatus(lastDate,nextTouch){
   if(!lastDate) return 'Cold';
   if(daysDiff(nextTouch)<0) return 'Overdue';
@@ -596,8 +711,10 @@ function calcStatus(lastDate,nextTouch){
 }
 function enrichContact(c){
   const lastDate = parseDate(c.last_touch_date);
-  const nextTouch = calcNextTouch(lastDate, c.priority);
-  return {...c, lastDateObj:lastDate, nextTouchObj:nextTouch, status:calcStatus(lastDate,nextTouch), days:daysDiff(nextTouch)};
+  const liveScore = computeLiveScore(c);
+  const liveTier = computePriorityFromScore(liveScore);
+  const nextTouch = calcNextTouch(lastDate, liveTier);
+  return {...c, lastDateObj:lastDate, nextTouchObj:nextTouch, status:calcStatus(lastDate,nextTouch), days:daysDiff(nextTouch), priority:liveTier, priority_score:liveScore};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -630,6 +747,8 @@ async function dbUpsertContact(data){
     priority_criteria: data.priority_criteria||[],
     assigned: data.assigned,
     touch_type: data.touch_type, engagement: data.engagement, notes: data.notes,
+    birthday: data.birthday||null,
+    important_dates: data.important_dates||[],
   };
   if(data.id){ row.id = data.id; }
   const {data:res, error} = await db.from('contacts').upsert(row).select().single();
@@ -646,6 +765,7 @@ async function dbInsertLog(data){
   const {data:res, error} = await db.from('interaction_log').insert({
     date: data.date, contact_name: data.contact_name,
     type: data.type, template_id: data.template_id||null,
+    reply_to_id: data.reply_to_id||null,
     response: data.response, notes: data.notes,
   }).select().single();
   if(error) throw error;
@@ -725,6 +845,15 @@ function selectCombobox(name){
   document.getElementById('l-contact-value').value=name;
   document.getElementById('l-contact-dropdown').classList.remove('open');
   comboboxFocusIdx=-1;
+  refreshReplyToOptions(name);
+}
+function refreshReplyToOptions(contactName){
+  const sel=document.getElementById('l-reply-to'); if(!sel) return;
+  const logs=interactionLog.filter(l=>l.contact_name===contactName).sort((a,b)=>b.date.localeCompare(a.date));
+  sel.innerHTML='<option value="">— standalone / new thread —</option>'+logs.map(l=>{
+    const snippet=(l.notes||'').slice(0,40);
+    return `<option value="${l.id}">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')}${snippet?' · '+esc(snippet)+(l.notes.length>40?'…':''):''}</option>`;
+  }).join('');
 }
 function comboboxKey(e){
   const dd=document.getElementById('l-contact-dropdown');
@@ -753,7 +882,7 @@ function showView(name){
   el.style.display='flex'; el.style.flexDirection='column';
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+name+"'")) b.classList.add('active');});
-  if(name==='tracker'){ populateDynamicFilters(); renderStats(); renderTable(); }
+  if(name==='tracker'){ populateDynamicFilters(); renderStats(); renderTable(); renderUpcomingDates(); }
   if(name==='log') renderLog();
   if(name==='templates') renderTemplates();
   if(name==='summary') renderSummary();
@@ -787,25 +916,54 @@ function populateContactForm(c){
   populateSelect('f-engagement',config.responseTypes,c?.engagement);
   renderPriorityCriteriaCheckboxes(c?.priority_criteria||[]);
   recalcPriorityForm();
+  currentImportantDates = Array.isArray(c?.important_dates) ? JSON.parse(JSON.stringify(c.important_dates)) : [];
+  renderImportantDatesRows();
 }
+function renderImportantDatesRows(){
+  const el=document.getElementById('f-important-dates'); if(!el) return;
+  el.innerHTML=currentImportantDates.map((d,i)=>`
+    <div class="important-date-row">
+      <input type="text" value="${esc(d.label||'')}" placeholder="Work anniversary, contract renewal…" oninput="currentImportantDates[${i}].label=this.value">
+      <input type="date" value="${esc(d.date||'')}" onchange="currentImportantDates[${i}].date=this.value">
+      <button class="icon-btn" title="Remove" onclick="removeImportantDateRow(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>`).join('');
+}
+function addImportantDateRow(){ currentImportantDates.push({label:'',date:''}); renderImportantDatesRows(); }
+function removeImportantDateRow(i){ currentImportantDates.splice(i,1); renderImportantDatesRows(); }
 function renderPriorityCriteriaCheckboxes(selectedIds){
   const el=document.getElementById('f-priority-criteria'); if(!el) return;
-  el.innerHTML=config.priorityCriteria.map(c=>`
+  const manual=config.priorityCriteria.filter(c=>!c.auto);
+  el.innerHTML=manual.map(c=>`
     <label class="criteria-item">
       <input type="checkbox" value="${esc(c.id)}" ${selectedIds.includes(c.id)?'checked':''} onchange="recalcPriorityForm()">
       <span>${esc(c.label)}</span>
       <span class="criteria-points">+${c.points}</span>
     </label>`).join('');
 }
+function renderAutoSignals(results){
+  const el=document.getElementById('f-auto-signals'); if(!el || !results.length) { if(el) el.innerHTML=''; return; }
+  el.innerHTML=results.map(r=>{
+    const cls=r.active?(r.points<0?'auto-signal-bad':'auto-signal-good'):'auto-signal-off';
+    const icon=r.active?(r.points<0?'⚠':'✓'):'—';
+    const sign=r.points<0?'−':'+';
+    return `<div class="auto-signal ${cls}"><span>${icon}</span><span>${esc(r.label)}</span><span class="criteria-points">${r.active?sign+Math.abs(r.points):'+0'}</span></div>`;
+  }).join('');
+}
 function recalcPriorityForm(){
   const checked=[...document.querySelectorAll('#f-priority-criteria input:checked')].map(i=>i.value);
-  const score=computeScore(checked);
-  const tier=computePriorityFromScore(score);
+  const manualScore=computeScore(checked);
+  const name=document.getElementById('f-name').value.trim();
+  const lastTouch=document.getElementById('f-lastDate').value||null;
+  const autoResults=computeAutoCriteriaResults({name, last_touch_date:lastTouch});
+  const autoScore=autoResults.reduce((s,r)=>s+(r.active?r.points:0),0);
+  const totalScore=manualScore+autoScore;
+  const tier=computePriorityFromScore(totalScore);
   document.getElementById('f-priority').value=tier;
-  document.getElementById('f-priority-score').value=score;
+  document.getElementById('f-priority-score').value=totalScore;
   document.getElementById('f-priority-criteria-ids').value=JSON.stringify(checked);
+  renderAutoSignals(autoResults);
   const resultEl=document.getElementById('f-priority-result');
-  if(resultEl) resultEl.innerHTML=`<span class="badge badge-${tierRankClass(tier)}">${esc(tier)} priority</span><span>${score} points</span>`;
+  if(resultEl) resultEl.innerHTML=`<span class="badge badge-${tierRankClass(tier)}">${esc(tier)} priority</span><span>${totalScore} points total (${manualScore} selected + ${autoScore>=0?'+':''}${autoScore} automatic)</span>`;
 }
 function populateLogForm(preselect){
   const tEl=document.getElementById('l-type');
@@ -829,6 +987,24 @@ function renderStats(){
     <div class="stat-card danger"><div class="stat-label">Overdue touches</div><div class="stat-value">${overdue}</div></div>
     <div class="stat-card warm"><div class="stat-label">Warm connections</div><div class="stat-value">${warm}</div></div>
     <div class="stat-card success"><div class="stat-label">Cold contacts</div><div class="stat-value">${cold}</div></div>`;
+}
+function renderUpcomingDates(){
+  const el=document.getElementById('upcoming-dates-panel'); if(!el) return;
+  const items=computeUpcomingDates(30);
+  if(!items.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="table-wrap" style="margin-bottom:20px;">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;">🎂 Upcoming dates <span style="font-size:11px;font-weight:400;color:var(--text-3);">next 30 days</span></div>
+    <div style="padding:2px 16px;">
+      ${items.map(it=>`
+        <div class="upcoming-item">
+          <div><span class="name-link" style="font-size:13px;font-weight:500;" onclick="openContactCard('${it.contactId}')">${esc(it.name)}</span><span style="font-size:12px;color:var(--text-3);"> · ${esc(it.label)} · ${formatDate(it.date)}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="days-pill ${it.days<=3?'days-soon':'days-ok'}">${it.days===0?'Today':it.days+'d'}</span>
+            <button class="btn btn-sm" onclick="openAddLogForContact('${it.contactId}')">Log touch</button>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -878,7 +1054,7 @@ function renderTable(){
     const nextDate=c.nextTouchObj?`<div class="sub">${formatDate(c.nextTouchObj)}</div>`:'';
     const li=c.linkedin?`<a class="li-link" href="https://${c.linkedin.replace(/^https?:\/\//,'')}" target="_blank">LinkedIn ↗</a>`:'';
     return`<tr>
-      <td><div class="name-cell">${esc(c.name)}</div><div class="sub">${esc(c.title||'')} ${li}</div></td>
+      <td><div class="name-cell name-link" onclick="openContactCard('${c.id}')">${esc(c.name)}</div><div class="sub">${esc(c.title||'')} ${li}</div></td>
       <td>${esc(c.company||'')}</td>
       <td>${relBadge(c.rel)}</td>
       <td>${statusBadge(c.status)}</td>
@@ -888,6 +1064,7 @@ function renderTable(){
       <td style="font-size:12px;">${esc(c.assigned||'')}</td>
       <td>${engBadge(c.engagement)}</td>
       <td><div class="row-actions">
+        <button class="icon-btn" title="View card" onclick="openContactCard('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
         <button class="icon-btn" title="Edit" onclick="openEditContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button class="icon-btn" title="Log touch" onclick="openAddLogForContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
         <button class="icon-btn" title="Remove" onclick="openDeleteContact('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
@@ -898,6 +1075,73 @@ function renderTable(){
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  CONTACT CARD
+// ═══════════════════════════════════════════════════════════════
+function openContactCard(id){
+  const c=contacts.find(x=>String(x.id)===String(id)); if(!c) return;
+  const e=enrichContact(c);
+  document.getElementById('cardTitle').textContent=c.name;
+  document.getElementById('contactCardBody').innerHTML=renderContactCardBody(c,e);
+  document.getElementById('cardLogBtn').onclick=()=>{ closeModal('contactCardModal'); openAddLogForContact(c.id); };
+  document.getElementById('cardEditBtn').onclick=()=>{ closeModal('contactCardModal'); openEditContact(c.id); };
+  document.getElementById('contactCardModal').style.display='flex';
+}
+function renderContactCardBody(c,e){
+  const li=c.linkedin?`<a class="li-link" href="https://${c.linkedin.replace(/^https?:\/\//,'')}" target="_blank">LinkedIn ↗</a>`:'';
+  const logs=interactionLog.filter(l=>l.contact_name===c.name).sort((a,b)=>b.date.localeCompare(a.date));
+  const statusCls={Overdue:'badge-overdue',Warm:'badge-warm',Cold:'badge-cold',Passive:'badge-passive'}[e.status]||'badge-cold';
+  const upcomingBits=[];
+  if(c.birthday){ const occ=nextOccurrence(c.birthday); if(occ) upcomingBits.push(`🎂 Birthday ${formatDate(occ)} (in ${Math.round((occ-today)/86400000)}d)`); }
+  (c.important_dates||[]).forEach(d=>{ if(!d.date) return; const occ=nextOccurrence(d.date); if(occ) upcomingBits.push(`📌 ${esc(d.label||'Date')} ${formatDate(occ)} (in ${Math.round((occ-today)/86400000)}d)`); });
+  return `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:16px;font-weight:600;">${esc(c.name)}</div>
+        <div style="font-size:13px;color:var(--text-2);">${esc(c.title||'')}${c.company?' · '+esc(c.company):''} ${li}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="badge badge-${tierRankClass(e.priority)}">${esc(e.priority)} priority</span>
+        <span class="badge ${statusCls}">${esc(e.status)}</span>
+        <span class="badge ${c.rel==='Past Client'?'badge-past':'badge-cold-type'}">${esc(c.rel||'')}</span>
+      </div>
+    </div>
+    <div class="card-info-grid">
+      <div><span class="label">Assigned to</span>${esc(c.assigned||'—')}</div>
+      <div><span class="label">Lifecycle</span>${esc(c.lifecycle||'—')}</div>
+      <div><span class="label">Last touch</span>${e.lastDateObj?formatDate(e.lastDateObj):'—'} ${c.last_touch_type?'· '+esc(c.last_touch_type):''}</div>
+      <div><span class="label">Next touch</span>${e.nextTouchObj?formatDate(e.nextTouchObj):'—'} ${e.days!==null?`(${e.days<0?Math.abs(e.days)+'d overdue':e.days+'d'})`:''}</div>
+      <div><span class="label">Original connection</span>${esc(c.connection||'—')}</div>
+      <div><span class="label">Trigger</span>${esc(c.trigger||'—')}</div>
+      <div><span class="label">Priority score</span>${e.priority_score} points</div>
+      <div><span class="label">Touch cadence</span>every ${monthsForPriority(e.priority)} months</div>
+    </div>
+    ${upcomingBits.length?`<div style="background:var(--warm-bg);border:1px solid var(--warm-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--warm);">${upcomingBits.join(' &nbsp;·&nbsp; ')}</div>`:''}
+    ${c.notes?`<div style="margin-bottom:16px;"><div class="label" style="margin-bottom:4px;">Notes</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;">${esc(c.notes)}</div></div>`:''}
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Interaction history <span style="font-weight:400;color:var(--text-3);">(${logs.length})</span></div>
+      ${logs.length?renderThreadedLogs(logs):'<div class="empty" style="padding:20px;"><p>No interactions logged yet.</p></div>'}
+    </div>`;
+}
+function renderThreadedLogs(logs){
+  const respBadge=r=>({'Positive Reply':'badge-positive','Neutral/No Update':'badge-neutral','No Response (No Read Receipt)':'badge-noresponse','No Response':'badge-noresponse','Ghosted':'badge-ghosted','Read & Ignored':'badge-ignored'}[r]||'badge-neutral');
+  return logs.map(l=>{
+    const parent=l.reply_to_id?interactionLog.find(x=>String(x.id)===String(l.reply_to_id)):null;
+    const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
+    const tplLabel=tpl?esc(tpl.name):'Custom';
+    return `<div class="log-item" style="${parent?'margin-left:20px;border-left:2px solid var(--border);padding-left:12px;':''}">
+      <div style="flex:1;min-width:0;">
+        ${parent?`<div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">↳ reply to ${esc(formatDate(parseDate(parent.date)))} · ${esc(parent.type||'')}</div>`:''}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response||'')}</span>
+          <span style="font-size:11px;color:var(--text-3);">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}</span>
+        </div>
+        <div class="log-note">${esc(l.notes||'')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  CONTACT CRUD
 // ═══════════════════════════════════════════════════════════════
 function openAddContact(){
@@ -905,7 +1149,7 @@ function openAddContact(){
   document.getElementById('modalTitle').textContent='Add contact';
   document.getElementById('saveContactBtn').textContent='Save contact';
   populateContactForm(null);
-  ['f-name','f-title','f-company','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-title','f-company','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes','f-birthday'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('contactModal').style.display='flex';
 }
 function openEditContact(id){
@@ -922,6 +1166,7 @@ function openEditContact(id){
   document.getElementById('f-lastDate').value=c.last_touch_date||'';
   document.getElementById('f-lastType').value=c.last_touch_type||'';
   document.getElementById('f-notes').value=c.notes||'';
+  document.getElementById('f-birthday').value=c.birthday||'';
   document.getElementById('contactModal').style.display='flex';
 }
 async function saveContact(){
@@ -945,6 +1190,8 @@ async function saveContact(){
     touch_type:document.getElementById('f-touchtype').value,
     engagement:document.getElementById('f-engagement').value,
     notes:document.getElementById('f-notes').value.trim(),
+    birthday:document.getElementById('f-birthday').value||null,
+    important_dates:currentImportantDates.filter(d=>d.date).map(d=>({label:(d.label||'').trim()||'Untitled date',date:d.date})),
   };
   setLoading('saveContactBtn',true);
   try{
@@ -997,6 +1244,8 @@ function renderLog(){
     const initials=(l.contact_name||'?').split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase();
     const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
     const tplLabel=tpl?`<span style="font-size:11px;color:var(--text-3);">${esc(tpl.name)} · </span>`:`<span style="font-size:11px;color:var(--text-3);">Custom · </span>`;
+    const parent=l.reply_to_id?interactionLog.find(x=>String(x.id)===String(l.reply_to_id)):null;
+    const replyTag=parent?`<div style="font-size:11px;color:var(--text-3);margin-top:2px;">↳ reply to ${esc(formatDate(parseDate(parent.date)))} · ${esc(parent.type||'')}</div>`:'';
     return`<div class="log-item">
       <div class="log-avatar">${initials}</div>
       <div style="flex:1;min-width:0;">
@@ -1005,6 +1254,7 @@ function renderLog(){
           <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response||'')}</span>
         </div>
         <div class="log-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}</div>
+        ${replyTag}
         <div class="log-note">${esc(l.notes||'')}</div>
       </div>
     </div>`;
@@ -1014,6 +1264,7 @@ function openAddLog(preselect){
   populateLogForm(preselect||'');
   document.getElementById('l-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('l-notes').value='';
+  refreshReplyToOptions(preselect||'');
   document.getElementById('logModal').style.display='flex';
 }
 function openAddLogForContact(id){
@@ -1024,11 +1275,13 @@ async function saveLog(){
   const contactName=document.getElementById('l-contact-value').value||document.getElementById('l-contact-input').value.trim();
   if(!contactName){alert('Please select a contact.');return;}
   const tmplId=document.getElementById('l-template').value||null;
+  const replyToId=document.getElementById('l-reply-to').value||null;
   const data={
     date:document.getElementById('l-date').value,
     contact_name:contactName,
     type:document.getElementById('l-type').value,
     template_id:tmplId,
+    reply_to_id:replyToId,
     response:document.getElementById('l-response').value,
     notes:document.getElementById('l-notes').value.trim(),
   };
@@ -1265,12 +1518,19 @@ function removePriorityTier(i){
 }
 function renderPriorityCriteriaRules(){
   const el=document.getElementById('priority-criteria-rules'); if(!el) return;
+  const autoDesc={
+    recent_interaction:'Auto: true when last touch date is under 6 months ago.',
+    high_responsiveness:'Auto: true when over 50% of this contact\'s logged interactions got a Positive Reply.',
+    lapsed_lead:'Auto: true when last touch date is over 12 months ago.',
+  };
   el.innerHTML=config.priorityCriteria.map((c,i)=>`
-    <div class="crit-rule">
+    <div class="crit-rule" style="${c.auto?'flex-wrap:wrap;':''}">
       <input type="text" value="${esc(c.label)}" onchange="config.priorityCriteria[${i}].label=this.value;">
-      <input type="number" value="${c.points}" min="-20" max="20" onchange="config.priorityCriteria[${i}].points=parseInt(this.value)||0;">
+      <input type="number" value="${c.points}" min="-20" max="20" onchange="config.priorityCriteria[${i}].points=parseInt(this.value)||0;refreshPriorityDependents();">
       <span class="priority-rule-label">points</span>
+      ${c.auto?`<span class="badge badge-cold-type" style="flex-shrink:0;">Automatic</span>`:''}
       <button class="icon-btn" title="Remove" onclick="removePriorityCriterion(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      ${c.auto&&autoDesc[c.id]?`<div style="flex-basis:100%;font-size:11px;color:var(--text-3);">${esc(autoDesc[c.id])}</div>`:''}
     </div>`).join('');
 }
 function addPriorityCriterion(){
@@ -1325,8 +1585,8 @@ window.addEventListener('beforeunload', e=>{
 //  EXPORT
 // ═══════════════════════════════════════════════════════════════
 function exportCSV(){
-  const headers=['Full Name','Title','Company','LinkedIn','Relationship Type','Connection','Trigger','Last Touch Date','Last Touch Type','Next Touch Date','Days Until Next Touch','Lifecycle','Priority','Status','Assigned To','Touch Type','Engagement','Notes'];
-  const rows=contacts.map(c=>{const e=enrichContact(c);return[c.name,c.title,c.company,c.linkedin,c.rel,c.connection,c.trigger,c.last_touch_date||'',c.last_touch_type||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,c.priority,e.status,c.assigned,c.touch_type,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`)});
+  const headers=['Full Name','Title','Company','LinkedIn','Relationship Type','Connection','Trigger','Last Touch Date','Last Touch Type','Next Touch Date','Days Until Next Touch','Lifecycle','Priority','Priority Score','Status','Assigned To','Touch Type','Engagement','Notes'];
+  const rows=contacts.map(c=>{const e=enrichContact(c);return[c.name,c.title,c.company,c.linkedin,c.rel,c.connection,c.trigger,c.last_touch_date||'',c.last_touch_type||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,e.priority,e.priority_score,e.status,c.assigned,c.touch_type,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`)});
   const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='cs_contact_tracker.csv';a.click();
 }
