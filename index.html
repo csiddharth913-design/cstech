@@ -105,6 +105,23 @@ tr:hover td{background:var(--bg);}
 .upcoming-item:last-child{border-bottom:none;}
 .card-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;font-size:13px;}
 .card-info-grid .label{color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:2px;}
+.badge-awaiting{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border);}
+/* Log card / threaded view */
+.log-thread-item{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;background:var(--surface);}
+.log-thread-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.log-thread-meta{font-size:11px;color:var(--text-3);}
+.log-thread-message{font-size:13px;color:var(--text);white-space:pre-wrap;background:var(--bg);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;}
+.log-thread-reply{font-size:13px;color:var(--text-2);white-space:pre-wrap;border-left:3px solid var(--accent-border);padding:8px 12px;margin-bottom:8px;background:var(--accent-bg);border-radius:0 var(--radius) var(--radius) 0;}
+.log-thread-actions{display:flex;gap:6px;margin-bottom:4px;flex-wrap:wrap;}
+.comments-section{border-top:1px dashed var(--border);padding-top:8px;margin-top:8px;}
+.comment-item{display:flex;gap:6px;padding:5px 0;font-size:12px;color:var(--text-2);}
+.comment-author{font-weight:600;color:var(--text);flex-shrink:0;}
+.comment-time{color:var(--text-3);flex-shrink:0;}
+.comment-compose{display:flex;gap:6px;margin-top:8px;align-items:flex-start;}
+.comment-compose select{width:130px;flex-shrink:0;}
+.comment-compose input{flex:1;}
+.next-action-callout{background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:16px;font-size:13px;color:var(--accent);}
+.log-list-toolbar-wrap{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .sub{font-size:12px;color:var(--text-3);margin-top:1px;}
 .li-link{color:var(--accent);font-size:12px;text-decoration:none;}
 .li-link:hover{text-decoration:underline;}
@@ -292,6 +309,7 @@ textarea{resize:vertical;min-height:60px;}
           <select class="filter-select" id="filterPriority" onchange="renderTable()"><option value="">All priorities</option></select>
           <select class="filter-select" id="filterRel" onchange="renderTable()"><option value="">All types</option></select>
           <select class="filter-select" id="filterAssigned" onchange="renderTable()"><option value="">All assignees</option></select>
+          <select class="filter-select" id="filterStage" onchange="renderTable()"><option value="">All stages</option></select>
         </div>
         <div style="overflow-x:auto;">
           <table>
@@ -323,8 +341,17 @@ textarea{resize:vertical;min-height:60px;}
       </button>
     </div>
     <div class="content">
-      <div class="table-wrap" style="padding:0 20px 20px;">
-        <div id="logList" style="padding-top:4px;"></div>
+      <div class="table-wrap" style="padding:0;">
+        <div class="log-list-toolbar-wrap">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" placeholder="Search messages, replies, notes…" id="logSearchInput" oninput="renderLog()">
+          </div>
+          <select class="filter-select" id="logFilterContact" onchange="renderLog()"><option value="">All contacts</option></select>
+          <select class="filter-select" id="logFilterResponse" onchange="renderLog()"><option value="">All outcomes</option></select>
+          <select class="filter-select" id="logFilterType" onchange="renderLog()"><option value="">All channels</option></select>
+        </div>
+        <div id="logList" style="padding:2px 20px 20px;"></div>
       </div>
     </div>
   </div>
@@ -396,7 +423,20 @@ New contacts — Fill all columns before marking active.</div></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Relationship type</label><select id="f-rel"></select></div>
-      <div class="form-group"><label>Assigned to</label><select id="f-assigned"></select></div>
+      <div class="form-group"><label>Industry</label><select id="f-industry"></select></div>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px;">
+      <label>Assigned to <span style="font-weight:400;color:var(--text-3);">— select everyone responsible for this relationship</span></label>
+      <div id="f-assignees" class="criteria-grid"></div>
+      <input type="hidden" id="f-assignees-ids">
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Pipeline stage</label><select id="f-stage"></select></div>
+      <div class="form-group"><label>Deal value <span style="font-weight:400;color:var(--text-3);">(optional, $)</span></label><input type="number" id="f-dealvalue" min="0" step="1" placeholder="e.g. 15000"></div>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px;">
+      <label>Next action <span style="font-weight:400;color:var(--text-3);">— the concrete next step to move this forward</span></label>
+      <input type="text" id="f-nextaction" placeholder="e.g. Send proposal, Schedule demo call…">
     </div>
     <div class="form-row">
       <div class="form-group"><label>Original CS Tech connection</label><input type="text" id="f-connection" placeholder="La Redoute project 2018–2022"></div>
@@ -441,9 +481,9 @@ New contacts — Fill all columns before marking active.</div></div>
 
 <!-- Log modal -->
 <div class="modal-backdrop" id="logModal" style="display:none;" onclick="closeOnBackdrop(event,'logModal')">
-<div class="modal" style="width:500px;" onclick="event.stopPropagation()">
+<div class="modal" style="width:540px;" onclick="event.stopPropagation()">
   <div class="modal-header">
-    <div class="modal-title">Log interaction</div>
+    <div class="modal-title" id="logModalTitleText">Log interaction</div>
     <button class="icon-btn" onclick="closeModal('logModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
   <div class="modal-body">
@@ -462,16 +502,58 @@ New contacts — Fill all columns before marking active.</div></div>
       <div class="form-group"><label>Touchpoint type</label><select id="l-type"></select></div>
       <div class="form-group"><label>Template used</label><select id="l-template"><option value="">— no template (custom) —</option></select></div>
     </div>
-    <div class="form-group" style="margin-bottom:12px;">
-      <label>Reply to <span style="font-weight:400;color:var(--text-3);">(optional — links this to an earlier interaction with them)</span></label>
-      <select id="l-reply-to"><option value="">— standalone / new thread —</option></select>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Reply to <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+        <select id="l-reply-to"><option value="">— standalone / new thread —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Logged by <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+        <select id="l-logged-by"><option value="">—</option></select>
+      </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px;"><label>Response type</label><select id="l-response"></select></div>
-    <div class="form-group"><label>Notes / outcome</label><textarea id="l-notes" rows="3" placeholder="What happened, key takeaways…"></textarea></div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Message sent <span style="font-weight:400;color:var(--text-3);">(optional — the actual content of what you sent)</span></label>
+      <textarea id="l-message" rows="3" placeholder="Paste or type the message you sent…"></textarea>
+    </div>
+    <div id="log-response-section" style="display:none;">
+      <div class="form-row">
+        <div class="form-group"><label>Response type</label><select id="l-response"></select></div>
+        <div class="form-group"><label>Reply date</label><input type="date" id="l-reply-date"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Reply message</label>
+        <textarea id="l-reply-message" rows="2" placeholder="What they said back…"></textarea>
+      </div>
+    </div>
+    <div class="form-group"><label>Internal notes <span style="font-weight:400;color:var(--text-3);">(optional — not sent to the contact)</span></label><textarea id="l-notes" rows="2" placeholder="Context for the team…"></textarea></div>
   </div>
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('logModal')">Cancel</button>
     <button class="btn btn-primary" id="saveLogBtn" onclick="saveLog()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Log reply modal — the fast path for filling in what came back -->
+<div class="modal-backdrop" id="logReplyModal" style="display:none;" onclick="closeOnBackdrop(event,'logReplyModal')">
+<div class="modal modal-sm" onclick="event.stopPropagation()">
+  <div class="modal-header">
+    <div class="modal-title">Log reply</div>
+    <button class="icon-btn" onclick="closeModal('logReplyModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <div id="reply-context" style="font-size:12px;color:var(--text-3);margin-bottom:12px;"></div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Response type</label>
+      <select id="lr-response"><option value="" disabled selected>— select outcome —</option></select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;"><label>Reply date</label><input type="date" id="lr-date"></div>
+    <div class="form-group"><label>Reply message <span style="font-weight:400;color:var(--text-3);">(optional)</span></label><textarea id="lr-message" rows="3" placeholder="What they said back…"></textarea></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('logReplyModal')">Cancel</button>
+    <button class="btn btn-primary" id="saveLogReplyBtn" onclick="saveLogReply()">Save reply</button>
   </div>
 </div>
 </div>
@@ -490,6 +572,20 @@ New contacts — Fill all columns before marking active.</div></div>
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('templateModal')">Cancel</button>
     <button class="btn btn-primary" id="saveTemplateBtn" onclick="saveTemplate()">Save template</button>
+  </div>
+</div>
+</div>
+
+<!-- Log card — full scrollable thread context -->
+<div class="modal-backdrop" id="logCardModal" style="display:none;" onclick="closeOnBackdrop(event,'logCardModal')">
+<div class="modal" style="width:640px;max-height:85vh;" onclick="event.stopPropagation()">
+  <div class="modal-header">
+    <div class="modal-title" id="logCardTitle">Thread</div>
+    <button class="icon-btn" onclick="closeModal('logCardModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body" id="logCardBody"></div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('logCardModal')">Close</button>
   </div>
 </div>
 </div>
@@ -568,6 +664,8 @@ let config = {
   touchTypes: ['Email','LinkedIn','Facebook','Phone','In person'],
   responseTypes: ['Positive Reply','Neutral/No Update','No Response (No Read Receipt)','No Response','Read & Ignored','Ghosted'],
   lifecycleStages: ['Active','Passive','Transition','Reactivation'],
+  industries: ['Retail / eCommerce','Fintech','Logistics','SaaS','Manufacturing','Healthcare','Other'],
+  pipelineStages: ['Prospecting','Contacted','Meeting Scheduled','Proposal Sent','Negotiating','Won','Lost'],
 };
 
 // Fills in any keys missing from an older saved config (e.g. before scoring existed)
@@ -605,6 +703,12 @@ function normalizeConfig(){
     minScore: (p.minScore!==undefined && p.minScore!==null) ? p.minScore : (fallbackMin[i]!==undefined?fallbackMin[i]:0),
   }));
   if(!config.priorities.length) config.priorities=[{name:'Low',months:6,minScore:0}];
+  if(!Array.isArray(config.industries) || !config.industries.length){
+    config.industries=['Retail / eCommerce','Fintech','Logistics','SaaS','Manufacturing','Healthcare','Other'];
+  }
+  if(!Array.isArray(config.pipelineStages) || !config.pipelineStages.length){
+    config.pipelineStages=['Prospecting','Contacted','Meeting Scheduled','Proposal Sent','Negotiating','Won','Lost'];
+  }
 }
 
 let sortCol = 'days', sortDir = 1;
@@ -613,6 +717,11 @@ let deleteTarget = null, deleteType = null;
 let currentView = 'tracker';
 let comboboxFocusIdx = -1;
 let currentImportantDates = []; // in-memory list of {label,date} while the contact modal is open
+let currentAssignees = []; // in-memory list of selected assignee names while the contact modal is open
+let logComments = [];
+let editingLogId = null;   // set when the log modal is in "edit" mode instead of "create"
+let replyLogTargetId = null; // which log entry the Log Reply modal is filling in
+let openLogCardEntryId = null; // which log entry the Log Card modal was opened from (for refresh-in-place)
 
 // ═══════════════════════════════════════════════════════════════
 //  DATE HELPERS
@@ -670,6 +779,16 @@ function tierRankClass(tierName){
   if(idx===1) return 'mid';
   return 'low';
 }
+// A log with no response yet is "awaiting reply" — distinct from an explicit "No Response" outcome.
+function responseBadgeInfo(r){
+  if(!r) return {cls:'badge-awaiting', label:'Awaiting reply'};
+  const cls={'Positive Reply':'badge-positive','Neutral/No Update':'badge-neutral','No Response (No Read Receipt)':'badge-noresponse','No Response':'badge-noresponse','Ghosted':'badge-ghosted','Read & Ignored':'badge-ignored'}[r]||'badge-neutral';
+  return {cls, label:r};
+}
+function fmtCurrency(n){
+  const v=parseFloat(n); if(!v && v!==0) return null;
+  return '$'+v.toLocaleString(undefined,{maximumFractionDigits:0});
+}
 // Computes the three automated signals for a contact ({name, last_touch_date}).
 // Reads the live interactionLog, so results always reflect the latest logged touches.
 function computeAutoCriteriaResults(contact){
@@ -683,8 +802,9 @@ function computeAutoCriteriaResults(contact){
 
   const respCrit=config.priorityCriteria.find(c=>c.id==='high_responsiveness');
   if(respCrit){
-    const total=logs.length;
-    const positive=logs.filter(l=>l.response==='Positive Reply').length;
+    const responded=logs.filter(l=>l.response);
+    const total=responded.length;
+    const positive=responded.filter(l=>l.response==='Positive Reply').length;
     results.push({...respCrit, active: total>0 && (positive/total)>0.5});
   }
 
@@ -721,18 +841,21 @@ function enrichContact(c){
 //  DB HELPERS  –  all reads/writes go through Supabase
 // ═══════════════════════════════════════════════════════════════
 async function dbLoad(){
-  const [c, l, t, s] = await Promise.all([
+  const [c, l, t, s, lc] = await Promise.all([
     db.from('contacts').select('*').order('name'),
     db.from('interaction_log').select('*').order('date', {ascending:false}),
     db.from('templates').select('*').order('created_at'),
     db.from('settings').select('*').eq('id', 1).single(),
+    db.from('log_comments').select('*').order('created_at'),
   ]);
   if(c.error) throw c.error;
   if(l.error) throw l.error;
   if(t.error) throw t.error;
+  if(lc.error) throw lc.error;
   contacts = c.data || [];
   interactionLog = l.data || [];
   templates = t.data || [];
+  logComments = lc.data || [];
   if(s.data?.config) config = {...config, ...s.data.config};
   normalizeConfig();
 }
@@ -745,10 +868,15 @@ async function dbUpsertContact(data){
     last_touch_type: data.last_touch_type, lifecycle: data.lifecycle,
     priority: data.priority, priority_score: data.priority_score||0,
     priority_criteria: data.priority_criteria||[],
-    assigned: data.assigned,
+    assigned: (data.assignees&&data.assignees[0])||data.assigned||null,
+    assignees: data.assignees||[],
     touch_type: data.touch_type, engagement: data.engagement, notes: data.notes,
     birthday: data.birthday||null,
     important_dates: data.important_dates||[],
+    industry: data.industry||null,
+    pipeline_stage: data.pipeline_stage||null,
+    deal_value: data.deal_value===''||data.deal_value===null||data.deal_value===undefined ? null : data.deal_value,
+    next_action: data.next_action||null,
   };
   if(data.id){ row.id = data.id; }
   const {data:res, error} = await db.from('contacts').upsert(row).select().single();
@@ -766,10 +894,37 @@ async function dbInsertLog(data){
     date: data.date, contact_name: data.contact_name,
     type: data.type, template_id: data.template_id||null,
     reply_to_id: data.reply_to_id||null,
-    response: data.response, notes: data.notes,
+    logged_by: data.logged_by||null,
+    message: data.message||null,
+    response: data.response||null,
+    reply_message: data.reply_message||null,
+    reply_date: data.reply_date||null,
+    notes: data.notes,
   }).select().single();
   if(error) throw error;
   return res;
+}
+
+async function dbUpdateLog(id, patch){
+  const {data:res, error} = await db.from('interaction_log').update(patch).eq('id', id).select().single();
+  if(error) throw error;
+  return res;
+}
+
+async function dbDeleteLog(id){
+  const {error} = await db.from('interaction_log').delete().eq('id', id);
+  if(error) throw error;
+}
+
+async function dbInsertComment(logId, author, comment){
+  const {data:res, error} = await db.from('log_comments').insert({log_id: logId, author, comment}).select().single();
+  if(error) throw error;
+  return res;
+}
+
+async function dbDeleteComment(id){
+  const {error} = await db.from('log_comments').delete().eq('id', id);
+  if(error) throw error;
 }
 
 async function dbUpsertTemplate(data){
@@ -847,12 +1002,12 @@ function selectCombobox(name){
   comboboxFocusIdx=-1;
   refreshReplyToOptions(name);
 }
-function refreshReplyToOptions(contactName){
+function refreshReplyToOptions(contactName, excludeId){
   const sel=document.getElementById('l-reply-to'); if(!sel) return;
-  const logs=interactionLog.filter(l=>l.contact_name===contactName).sort((a,b)=>b.date.localeCompare(a.date));
+  const logs=interactionLog.filter(l=>l.contact_name===contactName && String(l.id)!==String(excludeId)).sort((a,b)=>b.date.localeCompare(a.date));
   sel.innerHTML='<option value="">— standalone / new thread —</option>'+logs.map(l=>{
-    const snippet=(l.notes||'').slice(0,40);
-    return `<option value="${l.id}">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')}${snippet?' · '+esc(snippet)+(l.notes.length>40?'…':''):''}</option>`;
+    const snippet=(l.message||l.notes||'').slice(0,40);
+    return `<option value="${l.id}">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')}${snippet?' · '+esc(snippet)+((l.message||l.notes||'').length>40?'…':''):''}</option>`;
   }).join('');
 }
 function comboboxKey(e){
@@ -883,7 +1038,7 @@ function showView(name){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b=>{if(b.getAttribute('onclick')?.includes("'"+name+"'")) b.classList.add('active');});
   if(name==='tracker'){ populateDynamicFilters(); renderStats(); renderTable(); renderUpcomingDates(); }
-  if(name==='log') renderLog();
+  if(name==='log'){ populateLogFilters(); renderLog(); }
   if(name==='templates') renderTemplates();
   if(name==='summary') renderSummary();
   if(name==='settings') renderSettings();
@@ -904,20 +1059,61 @@ function populateDynamicFilters(){
   const fa=document.getElementById('filterAssigned');
   if(fa){
     const cur=fa.value;
-    fa.innerHTML='<option value="">All assignees</option>'+config.assignees.sort().map(a=>`<option${a===cur?' selected':''}>${esc(a)}</option>`).join('');
+    fa.innerHTML='<option value="">All assignees</option>'+config.assignees.slice().sort().map(a=>`<option${a===cur?' selected':''}>${esc(a)}</option>`).join('');
+  }
+  const fst=document.getElementById('filterStage');
+  if(fst){
+    const cur=fst.value;
+    fst.innerHTML='<option value="">All stages</option>'+config.pipelineStages.map(s=>`<option${s===cur?' selected':''}>${esc(s)}</option>`).join('');
+  }
+}
+function populateLogFilters(){
+  const fc=document.getElementById('logFilterContact');
+  if(fc){
+    const cur=fc.value;
+    const names=[...contacts].sort((a,b)=>a.name.localeCompare(b.name)).map(c=>c.name);
+    fc.innerHTML='<option value="">All contacts</option>'+names.map(n=>`<option${n===cur?' selected':''}>${esc(n)}</option>`).join('');
+  }
+  const fr=document.getElementById('logFilterResponse');
+  if(fr){
+    const cur=fr.value;
+    fr.innerHTML='<option value="">All outcomes</option><option value="__awaiting__">Awaiting reply</option>'+config.responseTypes.map(r=>`<option${r===cur?' selected':''}>${esc(r)}</option>`).join('');
+  }
+  const ft=document.getElementById('logFilterType');
+  if(ft){
+    const cur=ft.value;
+    ft.innerHTML='<option value="">All channels</option>'+config.touchTypes.map(t=>`<option${t===cur?' selected':''}>${esc(t)}</option>`).join('');
   }
 }
 function populateContactForm(c){
   populateSelect('f-rel',config.relationTypes,c?.rel);
+  populateSelect('f-industry',config.industries,c?.industry,true);
   populateSelect('f-trigger',config.triggers,c?.trigger);
   populateSelect('f-lifecycle',config.lifecycleStages,c?.lifecycle);
-  populateSelect('f-assigned',config.assignees,c?.assigned);
   populateSelect('f-touchtype',config.touchTypes,c?.touch_type);
   populateSelect('f-engagement',config.responseTypes,c?.engagement);
+  populateSelect('f-stage',config.pipelineStages,c?.pipeline_stage,true);
   renderPriorityCriteriaCheckboxes(c?.priority_criteria||[]);
   recalcPriorityForm();
   currentImportantDates = Array.isArray(c?.important_dates) ? JSON.parse(JSON.stringify(c.important_dates)) : [];
   renderImportantDatesRows();
+  const existingAssignees = (c?.assignees && c.assignees.length) ? c.assignees : (c?.assigned ? [c.assigned] : []);
+  currentAssignees = [...existingAssignees];
+  renderAssigneeCheckboxes();
+}
+function renderAssigneeCheckboxes(){
+  const el=document.getElementById('f-assignees'); if(!el) return;
+  el.innerHTML=config.assignees.map(a=>`
+    <label class="criteria-item">
+      <input type="checkbox" value="${esc(a)}" ${currentAssignees.includes(a)?'checked':''} onchange="recalcAssignees()">
+      <span>${esc(a)}</span>
+    </label>`).join('');
+  recalcAssignees();
+}
+function recalcAssignees(){
+  currentAssignees=[...document.querySelectorAll('#f-assignees input:checked')].map(i=>i.value);
+  const hidden=document.getElementById('f-assignees-ids');
+  if(hidden) hidden.value=JSON.stringify(currentAssignees);
 }
 function renderImportantDatesRows(){
   const el=document.getElementById('f-important-dates'); if(!el) return;
@@ -970,7 +1166,9 @@ function populateLogForm(preselect){
   tEl.innerHTML=config.touchTypes.map(v=>`<option>${esc(v)}</option>`).join('');
   const tmplEl=document.getElementById('l-template');
   tmplEl.innerHTML='<option value="">— no template (custom) —</option>'+templates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  populateSelect('l-response',config.responseTypes,config.responseTypes[0]);
+  populateSelect('l-response',config.responseTypes,null,true);
+  const lb=document.getElementById('l-logged-by');
+  if(lb) lb.innerHTML='<option value="">—</option>'+config.assignees.map(a=>`<option>${esc(a)}</option>`).join('');
   document.getElementById('l-contact-input').value=preselect||'';
   document.getElementById('l-contact-value').value=preselect||'';
 }
@@ -1017,12 +1215,14 @@ function renderTable(){
   const fP=document.getElementById('filterPriority')?.value||'';
   const fR=document.getElementById('filterRel')?.value||'';
   const fA=document.getElementById('filterAssigned')?.value||'';
+  const fSt=document.getElementById('filterStage')?.value||'';
   let rows=contacts.map(enrichContact).filter(c=>{
-    if(q&&!((c.name||'').toLowerCase().includes(q)||(c.company||'').toLowerCase().includes(q)||(c.title||'').toLowerCase().includes(q))) return false;
+    if(q&&!((c.name||'').toLowerCase().includes(q)||(c.company||'').toLowerCase().includes(q)||(c.title||'').toLowerCase().includes(q)||(c.industry||'').toLowerCase().includes(q))) return false;
     if(fS&&c.status!==fS) return false;
     if(fP&&c.priority!==fP) return false;
     if(fR&&c.rel!==fR) return false;
-    if(fA&&c.assigned!==fA) return false;
+    if(fA){ const list=(c.assignees&&c.assignees.length)?c.assignees:(c.assigned?[c.assigned]:[]); if(!list.includes(fA)) return false; }
+    if(fSt&&c.pipeline_stage!==fSt) return false;
     return true;
   });
   const priOrder={};config.priorities.forEach((p,i)=>priOrder[p.name]=i);
@@ -1061,7 +1261,7 @@ function renderTable(){
       <td>${priBadge(c.priority)}</td>
       <td>${daysPill}${nextDate}</td>
       <td style="font-size:12px;color:var(--text-2);">${c.lastDateObj?formatDate(c.lastDateObj):'—'}<div class="sub">${esc(c.last_touch_type||'')}</div></td>
-      <td style="font-size:12px;">${esc(c.assigned||'')}</td>
+      <td style="font-size:12px;">${esc((c.assignees&&c.assignees.length)?c.assignees.join(', '):(c.assigned||''))}</td>
       <td>${engBadge(c.engagement)}</td>
       <td><div class="row-actions">
         <button class="icon-btn" title="View card" onclick="openContactCard('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -1093,6 +1293,8 @@ function renderContactCardBody(c,e){
   const upcomingBits=[];
   if(c.birthday){ const occ=nextOccurrence(c.birthday); if(occ) upcomingBits.push(`🎂 Birthday ${formatDate(occ)} (in ${Math.round((occ-today)/86400000)}d)`); }
   (c.important_dates||[]).forEach(d=>{ if(!d.date) return; const occ=nextOccurrence(d.date); if(occ) upcomingBits.push(`📌 ${esc(d.label||'Date')} ${formatDate(occ)} (in ${Math.round((occ-today)/86400000)}d)`); });
+  const assigneeList=(c.assignees&&c.assignees.length)?c.assignees.join(', '):(c.assigned||'—');
+  const dealVal=fmtCurrency(c.deal_value);
   return `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       <div>
@@ -1103,11 +1305,15 @@ function renderContactCardBody(c,e){
         <span class="badge badge-${tierRankClass(e.priority)}">${esc(e.priority)} priority</span>
         <span class="badge ${statusCls}">${esc(e.status)}</span>
         <span class="badge ${c.rel==='Past Client'?'badge-past':'badge-cold-type'}">${esc(c.rel||'')}</span>
+        ${c.pipeline_stage?`<span class="badge badge-cold-type">${esc(c.pipeline_stage)}</span>`:''}
       </div>
     </div>
+    ${c.next_action?`<div class="next-action-callout">🎯 <strong>Next action:</strong> ${esc(c.next_action)}</div>`:''}
     <div class="card-info-grid">
-      <div><span class="label">Assigned to</span>${esc(c.assigned||'—')}</div>
+      <div><span class="label">Assigned to</span>${esc(assigneeList)}</div>
+      <div><span class="label">Industry</span>${esc(c.industry||'—')}</div>
       <div><span class="label">Lifecycle</span>${esc(c.lifecycle||'—')}</div>
+      <div><span class="label">Deal value</span>${dealVal||'—'}</div>
       <div><span class="label">Last touch</span>${e.lastDateObj?formatDate(e.lastDateObj):'—'} ${c.last_touch_type?'· '+esc(c.last_touch_type):''}</div>
       <div><span class="label">Next touch</span>${e.nextTouchObj?formatDate(e.nextTouchObj):'—'} ${e.days!==null?`(${e.days<0?Math.abs(e.days)+'d overdue':e.days+'d'})`:''}</div>
       <div><span class="label">Original connection</span>${esc(c.connection||'—')}</div>
@@ -1118,24 +1324,24 @@ function renderContactCardBody(c,e){
     ${upcomingBits.length?`<div style="background:var(--warm-bg);border:1px solid var(--warm-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--warm);">${upcomingBits.join(' &nbsp;·&nbsp; ')}</div>`:''}
     ${c.notes?`<div style="margin-bottom:16px;"><div class="label" style="margin-bottom:4px;">Notes</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;">${esc(c.notes)}</div></div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:14px;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Interaction history <span style="font-weight:400;color:var(--text-3);">(${logs.length})</span></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Interaction history <span style="font-weight:400;color:var(--text-3);">(${logs.length}) — click any entry to see the full thread</span></div>
       ${logs.length?renderThreadedLogs(logs):'<div class="empty" style="padding:20px;"><p>No interactions logged yet.</p></div>'}
     </div>`;
 }
 function renderThreadedLogs(logs){
-  const respBadge=r=>({'Positive Reply':'badge-positive','Neutral/No Update':'badge-neutral','No Response (No Read Receipt)':'badge-noresponse','No Response':'badge-noresponse','Ghosted':'badge-ghosted','Read & Ignored':'badge-ignored'}[r]||'badge-neutral');
   return logs.map(l=>{
     const parent=l.reply_to_id?interactionLog.find(x=>String(x.id)===String(l.reply_to_id)):null;
     const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
     const tplLabel=tpl?esc(tpl.name):'Custom';
-    return `<div class="log-item" style="${parent?'margin-left:20px;border-left:2px solid var(--border);padding-left:12px;':''}">
+    const {cls,label}=responseBadgeInfo(l.response);
+    return `<div class="log-item" style="cursor:pointer;${parent?'margin-left:20px;border-left:2px solid var(--border);padding-left:12px;':''}" onclick="closeModal('contactCardModal');openLogCard('${l.id}')">
       <div style="flex:1;min-width:0;">
         ${parent?`<div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">↳ reply to ${esc(formatDate(parseDate(parent.date)))} · ${esc(parent.type||'')}</div>`:''}
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response||'')}</span>
+          <span class="badge ${cls}" style="font-size:10px;">${esc(label)}</span>
           <span style="font-size:11px;color:var(--text-3);">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}</span>
         </div>
-        <div class="log-note">${esc(l.notes||'')}</div>
+        <div class="log-note">${esc(l.message||l.notes||'')}</div>
       </div>
     </div>`;
   }).join('');
@@ -1149,7 +1355,7 @@ function openAddContact(){
   document.getElementById('modalTitle').textContent='Add contact';
   document.getElementById('saveContactBtn').textContent='Save contact';
   populateContactForm(null);
-  ['f-name','f-title','f-company','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes','f-birthday'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-title','f-company','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes','f-birthday','f-dealvalue','f-nextaction'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('contactModal').style.display='flex';
 }
 function openEditContact(id){
@@ -1167,6 +1373,8 @@ function openEditContact(id){
   document.getElementById('f-lastType').value=c.last_touch_type||'';
   document.getElementById('f-notes').value=c.notes||'';
   document.getElementById('f-birthday').value=c.birthday||'';
+  document.getElementById('f-dealvalue').value=c.deal_value??'';
+  document.getElementById('f-nextaction').value=c.next_action||'';
   document.getElementById('contactModal').style.display='flex';
 }
 async function saveContact(){
@@ -1186,12 +1394,16 @@ async function saveContact(){
     priority:document.getElementById('f-priority').value,
     priority_score:parseInt(document.getElementById('f-priority-score').value)||0,
     priority_criteria:JSON.parse(document.getElementById('f-priority-criteria-ids').value||'[]'),
-    assigned:document.getElementById('f-assigned').value,
+    assignees:currentAssignees.slice(),
     touch_type:document.getElementById('f-touchtype').value,
     engagement:document.getElementById('f-engagement').value,
     notes:document.getElementById('f-notes').value.trim(),
     birthday:document.getElementById('f-birthday').value||null,
     important_dates:currentImportantDates.filter(d=>d.date).map(d=>({label:(d.label||'').trim()||'Untitled date',date:d.date})),
+    industry:document.getElementById('f-industry').value||null,
+    pipeline_stage:document.getElementById('f-stage').value||null,
+    deal_value:document.getElementById('f-dealvalue').value===''?null:parseFloat(document.getElementById('f-dealvalue').value),
+    next_action:document.getElementById('f-nextaction').value.trim()||null,
   };
   setLoading('saveContactBtn',true);
   try{
@@ -1226,6 +1438,13 @@ async function confirmDelete(){
       templates=templates.filter(t=>String(t.id)!==String(deleteTarget));
       closeModal('deleteModal'); renderTemplates();
       toast('Template deleted');
+    } else if(deleteType==='log'){
+      await dbDeleteLog(deleteTarget);
+      interactionLog=interactionLog.filter(l=>String(l.id)!==String(deleteTarget));
+      logComments=logComments.filter(c=>String(c.log_id)!==String(deleteTarget));
+      closeModal('deleteModal'); renderLog();
+      if(currentView==='tracker') renderTable();
+      toast('Interaction deleted');
     }
   }catch(e){
     console.error('Failed to delete:', e);
@@ -1238,32 +1457,63 @@ async function confirmDelete(){
 // ═══════════════════════════════════════════════════════════════
 function renderLog(){
   const el=document.getElementById('logList');
-  if(!interactionLog.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No interactions logged yet.</p></div>';return;}
-  const respBadge=r=>({'Positive Reply':'badge-positive','Neutral/No Update':'badge-neutral','No Response (No Read Receipt)':'badge-noresponse','No Response':'badge-noresponse','Ghosted':'badge-ghosted','Read & Ignored':'badge-ignored'}[r]||'badge-neutral');
-  el.innerHTML=interactionLog.map(l=>{
+  const q=(document.getElementById('logSearchInput')?.value||'').toLowerCase();
+  const fContact=document.getElementById('logFilterContact')?.value||'';
+  const fResponse=document.getElementById('logFilterResponse')?.value||'';
+  const fType=document.getElementById('logFilterType')?.value||'';
+  let rows=interactionLog.filter(l=>{
+    if(q){
+      const hay=[l.contact_name,l.message,l.reply_message,l.notes].filter(Boolean).join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    if(fContact && l.contact_name!==fContact) return false;
+    if(fResponse==='__awaiting__' && l.response) return false;
+    else if(fResponse && fResponse!=='__awaiting__' && l.response!==fResponse) return false;
+    if(fType && l.type!==fType) return false;
+    return true;
+  });
+  if(!rows.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No interactions match your filters.</p></div>';return;}
+  el.innerHTML=rows.map(l=>{
     const initials=(l.contact_name||'?').split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase();
     const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
     const tplLabel=tpl?`<span style="font-size:11px;color:var(--text-3);">${esc(tpl.name)} · </span>`:`<span style="font-size:11px;color:var(--text-3);">Custom · </span>`;
     const parent=l.reply_to_id?interactionLog.find(x=>String(x.id)===String(l.reply_to_id)):null;
     const replyTag=parent?`<div style="font-size:11px;color:var(--text-3);margin-top:2px;">↳ reply to ${esc(formatDate(parseDate(parent.date)))} · ${esc(parent.type||'')}</div>`:'';
+    const {cls,label}=responseBadgeInfo(l.response);
+    const msgPreview=l.message?`<div class="log-note" style="margin-top:4px;">${esc(l.message.slice(0,140))}${l.message.length>140?'…':''}</div>`:'';
+    const replyPreview=l.reply_message?`<div class="log-note" style="margin-top:2px;color:var(--accent);">↩ ${esc(l.reply_message.slice(0,140))}${l.reply_message.length>140?'…':''}</div>`:'';
     return`<div class="log-item">
       <div class="log-avatar">${initials}</div>
-      <div style="flex:1;min-width:0;">
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="openLogCard('${l.id}')">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:13px;font-weight:500;">${esc(l.contact_name||'')}</span>
-          <span class="badge ${respBadge(l.response)}" style="font-size:10px;">${esc(l.response||'')}</span>
+          <span class="badge ${cls}" style="font-size:10px;">${esc(label)}</span>
         </div>
-        <div class="log-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}</div>
+        <div class="log-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tplLabel}${l.logged_by?`<span style="font-size:11px;color:var(--text-3);">by ${esc(l.logged_by)}</span>`:''}</div>
         ${replyTag}
-        <div class="log-note">${esc(l.notes||'')}</div>
+        ${msgPreview}
+        ${replyPreview}
+        ${l.notes?`<div class="log-note" style="margin-top:2px;font-style:italic;">${esc(l.notes)}</div>`:''}
+      </div>
+      <div class="row-actions" style="flex-shrink:0;">
+        ${!l.response?`<button class="icon-btn" title="Log reply" onclick="event.stopPropagation();openLogReply('${l.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 17l-5-5 5-5M4 12h11a4 4 0 010 8h-1"/></svg></button>`:''}
+        <button class="icon-btn" title="Edit" onclick="event.stopPropagation();openEditLog('${l.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn" title="Delete" onclick="event.stopPropagation();openDeleteLog('${l.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
       </div>
     </div>`;
   }).join('');
 }
 function openAddLog(preselect){
+  editingLogId=null;
+  document.getElementById('logModalTitleText').textContent='Log interaction';
+  document.getElementById('saveLogBtn').textContent='Save';
+  document.getElementById('log-response-section').style.display='none';
   populateLogForm(preselect||'');
   document.getElementById('l-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('l-message').value='';
   document.getElementById('l-notes').value='';
+  document.getElementById('l-reply-message').value='';
+  document.getElementById('l-reply-date').value='';
   refreshReplyToOptions(preselect||'');
   document.getElementById('logModal').style.display='flex';
 }
@@ -1271,38 +1521,199 @@ function openAddLogForContact(id){
   const c=contacts.find(x=>String(x.id)===String(id));
   openAddLog(c?.name||'');
 }
+function openEditLog(id){
+  const l=interactionLog.find(x=>String(x.id)===String(id)); if(!l) return;
+  editingLogId=id;
+  document.getElementById('logModalTitleText').textContent='Edit interaction';
+  document.getElementById('saveLogBtn').textContent='Update';
+  populateLogForm(l.contact_name);
+  document.getElementById('l-date').value=l.date||'';
+  document.getElementById('l-type').value=l.type||'';
+  document.getElementById('l-template').value=l.template_id||'';
+  document.getElementById('l-logged-by').value=l.logged_by||'';
+  document.getElementById('l-message').value=l.message||'';
+  document.getElementById('l-notes').value=l.notes||'';
+  refreshReplyToOptions(l.contact_name, id);
+  document.getElementById('l-reply-to').value=l.reply_to_id||'';
+  document.getElementById('log-response-section').style.display='block';
+  populateSelect('l-response',config.responseTypes,l.response,true);
+  document.getElementById('l-reply-date').value=l.reply_date||'';
+  document.getElementById('l-reply-message').value=l.reply_message||'';
+  document.getElementById('logModal').style.display='flex';
+}
 async function saveLog(){
   const contactName=document.getElementById('l-contact-value').value||document.getElementById('l-contact-input').value.trim();
   if(!contactName){alert('Please select a contact.');return;}
   const tmplId=document.getElementById('l-template').value||null;
   const replyToId=document.getElementById('l-reply-to').value||null;
+  const isEdit=!!editingLogId;
   const data={
     date:document.getElementById('l-date').value,
     contact_name:contactName,
     type:document.getElementById('l-type').value,
     template_id:tmplId,
     reply_to_id:replyToId,
-    response:document.getElementById('l-response').value,
+    logged_by:document.getElementById('l-logged-by').value||null,
+    message:document.getElementById('l-message').value.trim()||null,
     notes:document.getElementById('l-notes').value.trim(),
   };
+  if(isEdit){
+    data.response=document.getElementById('l-response').value||null;
+    data.reply_date=document.getElementById('l-reply-date').value||null;
+    data.reply_message=document.getElementById('l-reply-message').value.trim()||null;
+  }
   setLoading('saveLogBtn',true);
   try{
-    const saved=await dbInsertLog(data);
-    interactionLog.unshift(saved);
-    // Update contact's last touch
-    const c=contacts.find(x=>x.name===contactName);
-    if(c){
-      c.last_touch_date=data.date; c.last_touch_type=data.type; c.engagement=data.response;
-      await dbUpsertContact(c);
+    let saved;
+    if(isEdit){
+      saved=await dbUpdateLog(editingLogId, data);
+      const idx=interactionLog.findIndex(x=>String(x.id)===String(editingLogId));
+      if(idx>-1) interactionLog[idx]=saved;
+    } else {
+      saved=await dbInsertLog(data);
+      interactionLog.unshift(saved);
+      // Update contact's last touch
+      const c=contacts.find(x=>x.name===contactName);
+      if(c){
+        c.last_touch_date=data.date; c.last_touch_type=data.type;
+        await dbUpsertContact(c);
+      }
     }
     closeModal('logModal'); renderLog();
     if(currentView==='tracker') renderTable();
-    toast('Interaction logged to Supabase ✓');
+    toast(isEdit?'Interaction updated in Supabase ✓':'Interaction logged to Supabase ✓');
   }catch(e){
     console.error('Failed to save interaction log:', e);
     showErrorBanner('Interaction failed to save', e);
   }
   finally{ setLoading('saveLogBtn',false); }
+}
+function openLogReply(id){
+  const l=interactionLog.find(x=>String(x.id)===String(id)); if(!l) return;
+  replyLogTargetId=id;
+  document.getElementById('reply-context').textContent=`Logging reply to: ${l.contact_name} · ${formatDate(parseDate(l.date))} · ${l.type||''}`;
+  populateSelect('lr-response',config.responseTypes,null,false);
+  document.getElementById('lr-response').value='';
+  document.getElementById('lr-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('lr-message').value='';
+  document.getElementById('logReplyModal').style.display='flex';
+}
+async function saveLogReply(){
+  const response=document.getElementById('lr-response').value;
+  if(!response){alert('Please select what the outcome was.');return;}
+  const patch={
+    response,
+    reply_date:document.getElementById('lr-date').value||null,
+    reply_message:document.getElementById('lr-message').value.trim()||null,
+  };
+  setLoading('saveLogReplyBtn',true);
+  try{
+    const saved=await dbUpdateLog(replyLogTargetId, patch);
+    const idx=interactionLog.findIndex(x=>String(x.id)===String(replyLogTargetId));
+    if(idx>-1) interactionLog[idx]=saved;
+    // Reflect the outcome on the contact's last engagement too
+    const c=contacts.find(x=>x.name===saved.contact_name);
+    if(c){ c.engagement=response; await dbUpsertContact(c); }
+    closeModal('logReplyModal'); renderLog();
+    if(currentView==='tracker') renderTable();
+    toast('Reply logged to Supabase ✓');
+  }catch(e){
+    console.error('Failed to save reply:', e);
+    showErrorBanner('Reply failed to save', e);
+  }
+  finally{ setLoading('saveLogReplyBtn',false); }
+}
+function openDeleteLog(id){
+  deleteTarget=id; deleteType='log';
+  const l=interactionLog.find(x=>String(x.id)===String(id));
+  document.getElementById('deleteTitle').textContent='Delete interaction?';
+  document.getElementById('deleteMsg').innerHTML=`This will permanently delete the interaction with <strong>${esc(l?.contact_name||'this contact')}</strong> from ${esc(l?formatDate(parseDate(l.date)):'')}.`;
+  document.getElementById('deleteConfirmBtn').textContent='Delete interaction';
+  document.getElementById('deleteModal').style.display='flex';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LOG CARD (threaded view)
+// ═══════════════════════════════════════════════════════════════
+// Walks reply_to_id up to the root, then gathers every descendant of that root.
+function getThreadForLog(logId){
+  let cur=interactionLog.find(l=>String(l.id)===String(logId));
+  if(!cur) return [];
+  let root=cur;
+  const upGuard=new Set();
+  while(root.reply_to_id && !upGuard.has(String(root.id))){
+    upGuard.add(String(root.id));
+    const parent=interactionLog.find(l=>String(l.id)===String(root.reply_to_id));
+    if(!parent) break;
+    root=parent;
+  }
+  const thread=[root];
+  const seen=new Set([String(root.id)]);
+  let frontier=[String(root.id)];
+  while(frontier.length){
+    const next=interactionLog.filter(l=>frontier.includes(String(l.reply_to_id)) && !seen.has(String(l.id)));
+    if(!next.length) break;
+    next.forEach(n=>{ seen.add(String(n.id)); thread.push(n); });
+    frontier=next.map(n=>String(n.id));
+  }
+  thread.sort((a,b)=>a.date.localeCompare(b.date));
+  return thread;
+}
+function openLogCard(logId){
+  const thread=getThreadForLog(logId);
+  if(!thread.length) return;
+  openLogCardEntryId=logId;
+  document.getElementById('logCardTitle').textContent=`${thread[0].contact_name} · thread (${thread.length})`;
+  document.getElementById('logCardBody').innerHTML=renderLogCardBody(thread);
+  document.getElementById('logCardModal').style.display='flex';
+}
+function refreshOpenLogCard(){
+  if(openLogCardEntryId && document.getElementById('logCardModal').style.display==='flex') openLogCard(openLogCardEntryId);
+}
+function renderLogCardBody(thread){
+  return thread.map(l=>{
+    const {cls,label}=responseBadgeInfo(l.response);
+    const tpl=l.template_id?templates.find(t=>String(t.id)===String(l.template_id)):null;
+    const comments=logComments.filter(c=>String(c.log_id)===String(l.id)).sort((a,b)=>a.created_at.localeCompare(b.created_at));
+    return `<div class="log-thread-item">
+      <div class="log-thread-header">
+        <div class="log-thread-meta">${esc(formatDate(parseDate(l.date)))} · ${esc(l.type||'')} · ${tpl?esc(tpl.name):'Custom'}${l.logged_by?' · by '+esc(l.logged_by):''}</div>
+        <span class="badge ${cls}">${esc(label)}</span>
+      </div>
+      ${l.message?`<div class="log-thread-message">${esc(l.message)}</div>`:'<div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">No message text recorded.</div>'}
+      ${l.reply_message?`<div class="log-thread-reply">↩ ${esc(l.reply_message)}${l.reply_date?`<div style="font-size:11px;color:var(--text-3);margin-top:4px;">${esc(formatDate(parseDate(l.reply_date)))}</div>`:''}</div>`:''}
+      ${l.notes?`<div style="font-size:12px;color:var(--text-3);font-style:italic;margin-bottom:8px;">${esc(l.notes)}</div>`:''}
+      <div class="log-thread-actions">
+        ${!l.response?`<button class="btn btn-sm" onclick="closeModal('logCardModal');openLogReply('${l.id}')">Log reply</button>`:''}
+        <button class="btn btn-sm" onclick="closeModal('logCardModal');openEditLog('${l.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="closeModal('logCardModal');openDeleteLog('${l.id}')">Delete</button>
+      </div>
+      <div class="comments-section">
+        ${comments.length?comments.map(cm=>`<div class="comment-item"><span class="comment-author">${esc(cm.author||'—')}:</span><span>${esc(cm.comment)}</span><span class="comment-time">${esc(formatDate(parseDate(cm.created_at)))}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text-3);">No comments yet.</div>'}
+        <div class="comment-compose">
+          <select id="comment-author-${l.id}">${config.assignees.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+          <input type="text" id="comment-input-${l.id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')addLogComment('${l.id}')">
+          <button class="btn btn-sm" onclick="addLogComment('${l.id}')">Post</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function addLogComment(logId){
+  const authorEl=document.getElementById('comment-author-'+logId);
+  const inputEl=document.getElementById('comment-input-'+logId);
+  const comment=inputEl.value.trim();
+  if(!comment) return;
+  const author=authorEl?authorEl.value:'';
+  try{
+    const saved=await dbInsertComment(logId, author, comment);
+    logComments.push(saved);
+    inputEl.value='';
+    refreshOpenLogCard();
+  }catch(e){
+    console.error('Failed to save comment:', e);
+    showErrorBanner('Comment failed to save', e);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1402,7 +1813,14 @@ function renderSummary(){
   const stats=getTemplateStats();
   const byStatus={Overdue:0,Warm:0,Cold:0,Passive:0};
   const byPriority={};config.priorities.forEach(p=>byPriority[p.name]=0);
-  enriched.forEach(c=>{byStatus[c.status]=(byStatus[c.status]||0)+1;if(byPriority[c.priority]!==undefined)byPriority[c.priority]++;});
+  const byStage={};config.pipelineStages.forEach(s=>byStage[s]=0);
+  enriched.forEach(c=>{
+    byStatus[c.status]=(byStatus[c.status]||0)+1;
+    if(byPriority[c.priority]!==undefined)byPriority[c.priority]++;
+    if(c.pipeline_stage && byStage[c.pipeline_stage]!==undefined) byStage[c.pipeline_stage]++;
+  });
+  const activeValue=enriched.reduce((s,c)=>s+((c.pipeline_stage&&c.pipeline_stage!=='Lost'&&c.pipeline_stage!=='Won')?(parseFloat(c.deal_value)||0):0),0);
+  const wonValue=enriched.filter(c=>c.pipeline_stage==='Won').reduce((s,c)=>s+(parseFloat(c.deal_value)||0),0);
   const totalLogs=interactionLog.length, templateLogs=interactionLog.filter(l=>l.template_id).length;
   const positiveReplies=interactionLog.filter(l=>l.response==='Positive Reply').length;
   const overallRate=totalLogs>0?Math.round((positiveReplies/totalLogs)*100):0;
@@ -1414,8 +1832,8 @@ function renderSummary(){
     <div class="stats-row" style="margin-bottom:16px;">
       <div class="stat-card"><div class="stat-label">Network size</div><div class="stat-value">${enriched.length}</div></div>
       <div class="stat-card danger"><div class="stat-label">Overdue</div><div class="stat-value">${byStatus.Overdue}</div></div>
-      <div class="stat-card success"><div class="stat-label">Warm</div><div class="stat-value">${byStatus.Warm}</div></div>
-      <div class="stat-card"><div class="stat-label">Overall response</div><div class="stat-value">${overallRate}%</div></div>
+      <div class="stat-card success"><div class="stat-label">Active pipeline value</div><div class="stat-value" style="font-size:20px;">${fmtCurrency(activeValue)||'$0'}</div></div>
+      <div class="stat-card"><div class="stat-label">Won value</div><div class="stat-value" style="font-size:20px;">${fmtCurrency(wonValue)||'$0'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
       <div class="template-card"><div class="template-name" style="margin-bottom:12px;">Status breakdown</div>
@@ -1426,12 +1844,17 @@ function renderSummary(){
       </div>
     </div>
     <div class="template-card" style="margin-bottom:16px;">
+      <div class="template-name" style="margin-bottom:12px;">Sales pipeline</div>
+      ${Object.entries(byStage).map(([k,v])=>`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="font-size:13px;color:var(--text-2);">${esc(k)}</span><div style="display:flex;align-items:center;gap:8px;">${bar(v,enriched.length)}<span style="font-size:13px;font-weight:500;min-width:20px;text-align:right;">${v}</span></div></div>`).join('')}
+    </div>
+    <div class="template-card" style="margin-bottom:16px;">
       <div class="template-name" style="margin-bottom:4px;">Interaction breakdown</div>
       <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">Custom interactions excluded from template scoring.</div>
       <div style="display:flex;gap:24px;">
         <div><div class="stat-label" style="font-size:10px;">Template-based</div><div style="font-size:20px;font-weight:600;">${templateLogs}</div></div>
         <div><div class="stat-label" style="font-size:10px;">Custom</div><div style="font-size:20px;font-weight:600;">${totalLogs-templateLogs}</div></div>
         <div><div class="stat-label" style="font-size:10px;">Total logged</div><div style="font-size:20px;font-weight:600;">${totalLogs}</div></div>
+        <div><div class="stat-label" style="font-size:10px;">Overall response rate</div><div style="font-size:20px;font-weight:600;">${overallRate}%</div></div>
       </div>
     </div>
     <div class="table-wrap">
@@ -1494,10 +1917,22 @@ function renderSettings(){
       <div class="tag-list" id="tags-lifecycleStages"></div>
       <div class="tag-add-row"><input type="text" id="new-lifecycle" placeholder="Add stage…" onkeydown="if(event.key==='Enter')addTag('lifecycleStages','new-lifecycle')"><button class="btn btn-sm" onclick="addTag('lifecycleStages','new-lifecycle')">Add</button></div>
     </div>
+    <div class="settings-section">
+      <div class="settings-title">Industries</div>
+      <div class="settings-desc">Industry options shown when adding/editing a contact.</div>
+      <div class="tag-list" id="tags-industries"></div>
+      <div class="tag-add-row"><input type="text" id="new-industry" placeholder="Add industry…" onkeydown="if(event.key==='Enter')addTag('industries','new-industry')"><button class="btn btn-sm" onclick="addTag('industries','new-industry')">Add</button></div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">Pipeline stages</div>
+      <div class="settings-desc">Sales pipeline stages shown on the contact form and used for the Summary funnel.</div>
+      <div class="tag-list" id="tags-pipelineStages"></div>
+      <div class="tag-add-row"><input type="text" id="new-stage" placeholder="Add stage…" onkeydown="if(event.key==='Enter')addTag('pipelineStages','new-stage')"><button class="btn btn-sm" onclick="addTag('pipelineStages','new-stage')">Add</button></div>
+    </div>
   </div>`;
   renderPriorityRules();
   renderPriorityCriteriaRules();
-  ['assignees','relationTypes','triggers','touchTypes','responseTypes','lifecycleStages'].forEach(renderTagList);
+  ['assignees','relationTypes','triggers','touchTypes','responseTypes','lifecycleStages','industries','pipelineStages'].forEach(renderTagList);
 }
 function renderPriorityRules(){
   const el=document.getElementById('priority-rules'); if(!el) return;
@@ -1585,8 +2020,12 @@ window.addEventListener('beforeunload', e=>{
 //  EXPORT
 // ═══════════════════════════════════════════════════════════════
 function exportCSV(){
-  const headers=['Full Name','Title','Company','LinkedIn','Relationship Type','Connection','Trigger','Last Touch Date','Last Touch Type','Next Touch Date','Days Until Next Touch','Lifecycle','Priority','Priority Score','Status','Assigned To','Touch Type','Engagement','Notes'];
-  const rows=contacts.map(c=>{const e=enrichContact(c);return[c.name,c.title,c.company,c.linkedin,c.rel,c.connection,c.trigger,c.last_touch_date||'',c.last_touch_type||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,e.priority,e.priority_score,e.status,c.assigned,c.touch_type,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`)});
+  const headers=['Full Name','Title','Company','Industry','LinkedIn','Relationship Type','Connection','Trigger','Last Touch Date','Last Touch Type','Next Touch Date','Days Until Next Touch','Lifecycle','Priority','Priority Score','Status','Assigned To','Pipeline Stage','Deal Value','Next Action','Touch Type','Engagement','Notes'];
+  const rows=contacts.map(c=>{
+    const e=enrichContact(c);
+    const assigneeList=(c.assignees&&c.assignees.length)?c.assignees.join('; '):(c.assigned||'');
+    return[c.name,c.title,c.company,c.industry||'',c.linkedin,c.rel,c.connection,c.trigger,c.last_touch_date||'',c.last_touch_type||'',e.nextTouchObj?e.nextTouchObj.toISOString().slice(0,10):'',e.days??'',c.lifecycle,e.priority,e.priority_score,e.status,assigneeList,c.pipeline_stage||'',c.deal_value??'',c.next_action||'',c.touch_type,c.engagement,c.notes].map(v=>`"${(v+'').replace(/"/g,'""')}"`);
+  });
   const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='cs_contact_tracker.csv';a.click();
 }
