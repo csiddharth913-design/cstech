@@ -636,6 +636,10 @@ function initSupabase() {
   db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
   return true;
 }
+// Supabase Edge Functions live at <project-url>/functions/v1/<name>.
+// Keeps the Groq key out of this public repo entirely —
+// it's stored as a function secret on Supabase, not here.
+function functionUrl(name){ return window.SUPABASE_URL.replace(/\/$/,'') + '/functions/v1/' + name; }
 
 // ═══════════════════════════════════════════════════════════════
 //  IN-MEMORY STATE  (populated from DB on load)
@@ -887,6 +891,25 @@ async function dbUpsertContact(data){
 async function dbDeleteContact(id){
   const {error} = await db.from('contacts').delete().eq('id',id);
   if(error) throw error;
+}
+
+// Partial update used by the AI summary + enrichment features below, so they never
+// have to know about (or risk clobbering) the full field list dbUpsertContact writes.
+async function dbUpdateContactFields(id, patch){
+  const {data:res, error} = await db.from('contacts').update(patch).eq('id', id).select().single();
+  if(error) throw error;
+  const i = contacts.findIndex(c=>String(c.id)===String(id));
+  if(i>-1) contacts[i] = res;
+  return res;
+}
+
+// Re-fetches a single contact row from the DB without a full page reload.
+async function dbRefreshContact(id){
+  const {data:res, error} = await db.from('contacts').select('*').eq('id', id).single();
+  if(error) throw error;
+  const i = contacts.findIndex(c=>String(c.id)===String(id));
+  if(i>-1) contacts[i] = res;
+  return res;
 }
 
 async function dbInsertLog(data){
@@ -1323,10 +1346,45 @@ function renderContactCardBody(c,e){
     </div>
     ${upcomingBits.length?`<div style="background:var(--warm-bg);border:1px solid var(--warm-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--warm);">${upcomingBits.join(' &nbsp;·&nbsp; ')}</div>`:''}
     ${c.notes?`<div style="margin-bottom:16px;"><div class="label" style="margin-bottom:4px;">Notes</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;">${esc(c.notes)}</div></div>`:''}
+    ${renderEnrichmentSection(c)}
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:600;">✨ AI summary</div>
+        <button class="btn btn-sm" id="aiSummaryBtn" onclick="generateAiSummary('${c.id}')">${c.ai_summary?'Regenerate':'Generate summary'}</button>
+      </div>
+      <div id="aiSummaryBox">
+        ${c.ai_summary
+          ? `<div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;">${esc(c.ai_summary)}</div>
+             <div style="font-size:11px;color:var(--text-3);margin-top:4px;">Generated ${c.ai_summary_updated_at?formatDate(parseDate(c.ai_summary_updated_at)):'—'}${aiSummaryIsStale(c,logs)?' · new activity since then':''}</div>`
+          : `<div style="font-size:12px;color:var(--text-3);">No summary yet — click Generate to summarize the interaction history below.</div>`}
+      </div>
+    </div>
     <div style="border-top:1px solid var(--border);padding-top:14px;">
       <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Interaction history <span style="font-weight:400;color:var(--text-3);">(${logs.length}) — click any entry to see the full thread</span></div>
       ${logs.length?renderThreadedLogs(logs):'<div class="empty" style="padding:20px;"><p>No interactions logged yet.</p></div>'}
     </div>`;
+}
+// True once a log has landed after the last time the AI summary was generated.
+function aiSummaryIsStale(c,logs){
+  if(!c.ai_summary_updated_at || !logs.length) return false;
+  const latestLog = logs[logs.length-1].date;
+  return new Date(latestLog) > new Date(c.ai_summary_updated_at);
+}
+// Renders the "AI research" card: either the last research brief generated,
+// or a prompt to run one.
+function renderEnrichmentSection(c){
+  return `<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:600;">🤖 AI research</div>
+      <button class="btn btn-sm" id="enrichBtn" onclick="triggerEnrichment('${c.id}')">${c.ai_enrichment?'Refresh':'Enrich with AI'}</button>
+    </div>
+    <div id="enrichBox">
+      ${c.ai_enrichment
+        ? `<div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;">${esc(c.ai_enrichment)}</div>
+           <div style="font-size:11px;color:var(--text-3);margin-top:4px;">Researched ${c.ai_enrichment_updated_at?formatDate(parseDate(c.ai_enrichment_updated_at)):'—'} · AI-generated from web search — verify before repeating specifics (e.g. "expanding") as fact</div>`
+        : `<div style="font-size:12px;color:var(--text-3);">No research yet — click "Enrich with AI" to look up the company and contact.</div>`}
+    </div>
+  </div>`;
 }
 function renderThreadedLogs(logs){
   return logs.map(l=>{
@@ -1345,6 +1403,64 @@ function renderThreadedLogs(logs){
       </div>
     </div>`;
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AI SUMMARY  (Groq, called through a Supabase Edge Function that hides the key)
+// ═══════════════════════════════════════════════════════════════
+async function generateAiSummary(contactId){
+  const c = contacts.find(x=>String(x.id)===String(contactId)); if(!c) return;
+  const btn = document.getElementById('aiSummaryBtn');
+  const box = document.getElementById('aiSummaryBox');
+  if(btn){ btn.disabled=true; btn.textContent='Generating…'; }
+  if(box) box.innerHTML = '<div style="font-size:12px;color:var(--text-3);">Reading through the interaction history…</div>';
+  try{
+    const logs = interactionLog.filter(l=>l.contact_name===c.name).sort((a,b)=>a.date.localeCompare(b.date));
+    const res = await fetch(functionUrl('summarize-contact'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        contact: {name:c.name, title:c.title, company:c.company, rel:c.rel, notes:c.notes},
+        logs: logs.map(l=>({date:l.date, type:l.type, message:l.message, response:l.response, reply_message:l.reply_message}))
+      })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || ('Summary request failed ('+res.status+')'));
+    await dbUpdateContactFields(c.id, {ai_summary: data.summary, ai_summary_updated_at: new Date().toISOString()});
+    openContactCard(c.id); // re-render the card with the fresh summary
+    toast('Summary generated');
+  }catch(err){
+    showErrorBanner('Could not generate AI summary', err);
+    if(btn){ btn.disabled=false; btn.textContent='Generate summary'; }
+    if(box) box.innerHTML = '<div style="font-size:12px;color:var(--text-3);">No summary yet.</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AI RESEARCH  (Groq's compound model — built-in web search, same key as summaries)
+// ═══════════════════════════════════════════════════════════════
+async function triggerEnrichment(contactId){
+  const c = contacts.find(x=>String(x.id)===String(contactId)); if(!c) return;
+  const btn = document.getElementById('enrichBtn');
+  const box = document.getElementById('enrichBox');
+  if(btn){ btn.disabled=true; btn.textContent='Researching…'; }
+  if(box) box.innerHTML = '<div style="font-size:12px;color:var(--text-3);">Searching for company + contact info…</div>';
+  try{
+    const res = await fetch(functionUrl('ai-enrich-contact'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:c.name, title:c.title, company:c.company, linkedin:c.linkedin})
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || ('AI research request failed ('+res.status+')'));
+    await dbUpdateContactFields(c.id, {ai_enrichment: data.summary, ai_enrichment_updated_at: new Date().toISOString()});
+    openContactCard(c.id);
+    toast('Research complete');
+  }catch(err){
+    showErrorBanner('Could not research this contact', err);
+    if(btn){ btn.disabled=false; btn.textContent=c.ai_enrichment?'Refresh':'Enrich with AI'; }
+    if(box) box.innerHTML = '<div style="font-size:12px;color:var(--text-3);">No research yet — click "Enrich with AI" to look up the company and contact.</div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
