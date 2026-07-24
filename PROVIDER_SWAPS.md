@@ -1,6 +1,6 @@
 # Swapping Providers Later
 
-This app was built with Supabase (database) and Groq (AI). Neither is locked in — here's roughly what's involved if you want to change any of them, kept brief on purpose.
+This app was built with Supabase (database) and Groq (AI). Here's roughly what's involved if you want to change any of them, kept brief on purpose.
 
 ---
 
