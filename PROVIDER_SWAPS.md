@@ -1,6 +1,6 @@
 # Swapping Providers Later
 
-This app was built with Supabase (database) and Groq (AI). Neither is locked in — here's roughly what's involved if you (or whoever you hand this off to) want to change any of them, kept brief on purpose.
+This app was built with Supabase (database) and Groq (AI). Neither is locked in — here's roughly what's involved if you want to change any of them, kept brief on purpose.
 
 ---
 
@@ -14,7 +14,6 @@ This app was built with Supabase (database) and Groq (AI). Neither is locked in 
 3. Recreate the equivalent of Row Level Security in whatever access-control model the new backend uses.
 4. Update `functionUrl()` (or remove it) if the AI Edge Functions move too — see below.
 
-Realistic effort: a day or so for someone who knows both platforms; more if the new backend's data model is very different from a relational database (e.g. a document store like Firebase).
 
 ---
 
