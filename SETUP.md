@@ -1,7 +1,5 @@
 # CS Tech Contact Tracker — Full Setup Guide
 
-Everything needed to stand this app up from nothing: the database, the app itself, and the two AI features (summaries + research). Follow it top to bottom — it takes about 30–40 minutes total.
-
 ---
 
 ## What this app is
@@ -25,7 +23,7 @@ A shared contact tracker for the team: contacts, interaction history, follow-up 
 
 ## Step 2 — Create the full database schema
 
-In your Supabase project, click **SQL Editor** in the left sidebar → **New query** → paste the entire block below → **Run**. This is the complete, current schema — you don't need to run anything else after this.
+In your Supabase project, click **SQL Editor** in the left sidebar → **New query** → paste the entire block below → **Run**.
 
 ```sql
 -- Templates (created first — interaction_log references it)
@@ -188,7 +186,7 @@ Two things live on each contact card: an **AI summary** of the interaction histo
 These instructions assume deploying through the Supabase dashboard (Edge Functions → Deploy a new function), since that's the most common path if you don't have the Supabase CLI installed. If you do use the CLI, the equivalent commands are `supabase functions deploy <name>` and `supabase secrets set GROQ_API_KEY=...`.
 
 1. In your Supabase project, go to **Edge Functions** in the left sidebar → **Deploy a new function**
-2. Name it **exactly** `summarize-contact` (this must match exactly — the app calls this URL directly, and even small differences like a British-vs-American spelling will silently 404)
+2. Name it **exactly** `summarize-contact` (this must match exactly — the app calls this URL directly, and even small differences like a British-vs-American spelling will silently 404 (I made this mistake))
 3. Paste in the full contents of `supabase/functions/summarize-contact/index.ts` and deploy
 4. Repeat for a second function named **exactly** `ai-enrich-contact`, using `supabase/functions/ai-enrich-contact/index.ts`
 5. Turn off JWT verification for both. Depending on where you find it, this is either a toggle labeled **"Enforce JWT verification"** at creation/in the function's settings, or — if deploying via CLI — the `supabase/config.toml` file included alongside this guide. Both functions are called directly from the browser with no login step, so they need this off; otherwise every request is blocked before your code ever runs.
@@ -220,8 +218,6 @@ Open the app, open any contact with some interaction history, and click **Genera
 | Click "Enrich with AI" on a contact card | Calls `ai-enrich-contact`, which uses Groq's web-search-enabled model to research the company + contact |
 | Another team member opens the URL | They see the same data in real time |
 | Someone else makes a change | Refresh the page to see it |
-
-Both AI features send **every non-empty field on the contact** (name, title, company, email, notes, whatever you add later) to the AI — not a fixed hardcoded list — so new fields flow through automatically without needing code changes.
 
 ---
 
