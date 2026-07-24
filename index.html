@@ -422,7 +422,10 @@ New contacts — Fill all columns before marking active.</div></div>
       <div class="form-group"><label>LinkedIn URL</label><input type="url" id="f-linkedin" placeholder="linkedin.com/in/…"></div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="sophie@laredoute.com"></div>
       <div class="form-group"><label>Relationship type</label><select id="f-rel"></select></div>
+    </div>
+    <div class="form-row" style="grid-template-columns:1fr;">
       <div class="form-group"><label>Industry</label><select id="f-industry"></select></div>
     </div>
     <div class="form-group full" style="margin-bottom:14px;">
@@ -867,6 +870,7 @@ async function dbLoad(){
 async function dbUpsertContact(data){
   const row = {
     name: data.name, title: data.title, company: data.company,
+    email: data.email||null,
     linkedin: data.linkedin, rel: data.rel, connection: data.connection,
     trigger: data.trigger, last_touch_date: data.last_touch_date||null,
     last_touch_type: data.last_touch_type, lifecycle: data.lifecycle,
@@ -1311,6 +1315,7 @@ function openContactCard(id){
 }
 function renderContactCardBody(c,e){
   const li=c.linkedin?`<a class="li-link" href="https://${c.linkedin.replace(/^https?:\/\//,'')}" target="_blank">LinkedIn ↗</a>`:'';
+  const emailLink=c.email?`<a class="li-link" href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:'';
   const logs=interactionLog.filter(l=>l.contact_name===c.name).sort((a,b)=>b.date.localeCompare(a.date));
   const statusCls={Overdue:'badge-overdue',Warm:'badge-warm',Cold:'badge-cold',Passive:'badge-passive'}[e.status]||'badge-cold';
   const upcomingBits=[];
@@ -1322,7 +1327,7 @@ function renderContactCardBody(c,e){
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       <div>
         <div style="font-size:16px;font-weight:600;">${esc(c.name)}</div>
-        <div style="font-size:13px;color:var(--text-2);">${esc(c.title||'')}${c.company?' · '+esc(c.company):''} ${li}</div>
+        <div style="font-size:13px;color:var(--text-2);">${esc(c.title||'')}${c.company?' · '+esc(c.company):''} ${emailLink} ${li}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <span class="badge badge-${tierRankClass(e.priority)}">${esc(e.priority)} priority</span>
@@ -1408,6 +1413,25 @@ function renderThreadedLogs(logs){
 // ═══════════════════════════════════════════════════════════════
 //  AI SUMMARY  (Groq, called through a Supabase Edge Function that hides the key)
 // ═══════════════════════════════════════════════════════════════
+// Builds the contact payload sent to the AI functions. Rather than hardcoding
+// a fixed list of fields, this sends everything on the contact record EXCEPT
+// internal/bookkeeping fields the AI doesn't need — so any field added to the
+// contact form later (a new column, a new form field) is included automatically
+// with no further code changes needed here.
+const AI_EXCLUDED_CONTACT_FIELDS = new Set([
+  'id','created_at','priority_score','priority_criteria',
+  'ai_summary','ai_summary_updated_at','ai_enrichment','ai_enrichment_updated_at'
+]);
+function contactInfoForAI(c){
+  const out = {};
+  for(const [k,v] of Object.entries(c)){
+    if(AI_EXCLUDED_CONTACT_FIELDS.has(k)) continue;
+    if(v===null || v===undefined || v==='') continue;
+    if(Array.isArray(v) && v.length===0) continue;
+    out[k]=v;
+  }
+  return out;
+}
 async function generateAiSummary(contactId){
   const c = contacts.find(x=>String(x.id)===String(contactId)); if(!c) return;
   const btn = document.getElementById('aiSummaryBtn');
@@ -1420,7 +1444,7 @@ async function generateAiSummary(contactId){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        contact: {name:c.name, title:c.title, company:c.company, rel:c.rel, notes:c.notes},
+        contact: contactInfoForAI(c),
         logs: logs.map(l=>({date:l.date, type:l.type, message:l.message, response:l.response, reply_message:l.reply_message}))
       })
     });
@@ -1449,7 +1473,7 @@ async function triggerEnrichment(contactId){
     const res = await fetch(functionUrl('ai-enrich-contact'), {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name:c.name, title:c.title, company:c.company, linkedin:c.linkedin})
+      body: JSON.stringify({contact: contactInfoForAI(c)})
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(data.error || ('AI research request failed ('+res.status+')'));
@@ -1471,7 +1495,7 @@ function openAddContact(){
   document.getElementById('modalTitle').textContent='Add contact';
   document.getElementById('saveContactBtn').textContent='Save contact';
   populateContactForm(null);
-  ['f-name','f-title','f-company','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes','f-birthday','f-dealvalue','f-nextaction'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-title','f-company','f-email','f-linkedin','f-connection','f-lastDate','f-lastType','f-notes','f-birthday','f-dealvalue','f-nextaction'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('contactModal').style.display='flex';
 }
 function openEditContact(id){
@@ -1483,6 +1507,7 @@ function openEditContact(id){
   document.getElementById('f-name').value=c.name||'';
   document.getElementById('f-title').value=c.title||'';
   document.getElementById('f-company').value=c.company||'';
+  document.getElementById('f-email').value=c.email||'';
   document.getElementById('f-linkedin').value=c.linkedin||'';
   document.getElementById('f-connection').value=c.connection||'';
   document.getElementById('f-lastDate').value=c.last_touch_date||'';
@@ -1500,6 +1525,7 @@ async function saveContact(){
     id: editingContactId||undefined,
     name, title:document.getElementById('f-title').value.trim(),
     company:document.getElementById('f-company').value.trim(),
+    email:document.getElementById('f-email').value.trim(),
     linkedin:document.getElementById('f-linkedin').value.trim(),
     rel:document.getElementById('f-rel').value,
     connection:document.getElementById('f-connection').value.trim(),
